@@ -38,10 +38,6 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
@@ -49,14 +45,6 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void DMX_GPIO_Init(void);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
@@ -64,32 +52,15 @@ static void DMX_GPIO_Init(void);
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_TIM2_Init();
-
-
   /* USER CODE BEGIN 2 */
   //char data_to_send[100] = "Hello World\n";
   //HAL_UART_Transmit(&huart1, data_to_send, strlen(data_to_send), TIMEOUT);
@@ -115,20 +86,23 @@ int main(void)
 	/* Envio de dados ----------------------------------------------------------------------------------------------*/
 
 	//uint8_t* dmx_rdm_data = SET_identify_device(UID_D, UID_S, TN, ID, Sub_Dev, Identify_start_stop);
-	uint8_t* dmx_rdm_data = DISC_unique_branch(UID_D, UID_S, TN, ID, LB_PD, UB_PD);
-	//uint8_t dmx_rdm_data[] = {0x00, 0x00, 0x36, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													 //0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													 //0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													// 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
+	//uint8_t* dmx_rdm_data = DISC_unique_branch(UID_D, UID_S, TN, ID, LB_PD, UB_PD);
+	uint8_t dmx_rdm_data[56] = {0x00, 0x00, 0x36, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
 
 	// Envia para a serial debug os dados a serem enviados
 	unsigned char viewMessage[15];
 	HAL_UART_Transmit(&huart1, data_send_message, sizeof(data_send_message), 10);	// Sending in normal mode
 
  // Faz a transmissão  de fato
-	//HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
-	HAL_TIM_Base_Start(&htim2);
+
+	/*HAL_TIM_Base_Start(&htim2);
 	DMX_GPIO_Init(); // Inicia DMX modo GPIO
+
+	DMX_Set_HIGH();
+	delay_us(20);
 
 	DMX_Set_LOW(); // Setando Break
 	delay_us(176);
@@ -138,14 +112,16 @@ int main(void)
 
 	DMX_Set_LOW(); // Setando Break
 
-	DMX_GPIO_DeInit(); // Desativa o modo GPIO
+	DMX_GPIO_DeInit(); // Desativa o modo GPIO*/
 
 	DMX_UART_Init();// Inicia novamente o modo USART
+
+	HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
 
 	for(int i = 0; i < dmx_rdm_data[2] + 2; i++){
 			sprintf(viewMessage, "[%d] - 0x%02x\r\n", i, dmx_rdm_data[i]);
 			HAL_UART_Transmit(&huart1, viewMessage, sizeof(viewMessage), TIMEOUT);
-			HAL_UART_Transmit(&huart2, 0b11001100, 1, TIMEOUT);
+			//HAL_UART_Transmit(&huart2, 0b11001100, 1, TIMEOUT);
 	}
 
 	/* Recepção de dados -----------------------------------------------------------------------------------------------------------*/
@@ -172,7 +148,6 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
 static void DMX_GPIO_Init(void){
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -256,7 +231,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 48;
+  htim2.Init.Prescaler = 48-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
