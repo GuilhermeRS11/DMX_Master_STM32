@@ -20,10 +20,12 @@
 #include "main.h"
 
 #define DMX_UART_Init MX_USART2_UART_Init
-#define DMX_UART_DeInit HAL_UART_DeInit
+#define DMX_UART_DeInit HAL_UART_DeInit(&huart2)
 #define DMX_GPIO_DeInit() HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2); // Desativa o modo GPIO
 #define DMX_Set_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 #define DMX_Set_HIGH() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+#define DMX_Set_DE_LOW() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
+#define DMX_Set_DE_HIGH() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_SET);
 
 
 /* Private define ------------------------------------------------------------*/
@@ -52,125 +54,152 @@ static void DMX_GPIO_Init(void);
   */
 int main(void)
 {
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	  HAL_Init();
 
-  SystemClock_Config();
+	  SystemClock_Config();
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_USART1_UART_Init();
-  MX_TIM2_Init();
-  /* USER CODE BEGIN 2 */
-  //char data_to_send[100] = "Hello World\n";
-  //HAL_UART_Transmit(&huart1, data_to_send, strlen(data_to_send), TIMEOUT);
+	  /* Initialize all configured peripherals */
+	  MX_GPIO_Init();
+	  MX_USART1_UART_Init();
+	  MX_TIM2_Init();
+	  /* USER CODE BEGIN 2 */
+	  //char data_to_send[100] = "Hello World\n";
+	  //HAL_UART_Transmit(&huart1, data_to_send, strlen(data_to_send), TIMEOUT);
 
-	uint8_t TN = 0x00;
-	uint8_t ID = 0x01;
-	uint8_t Identify_start_stop = 0x01;
-	uint16_t PID_Resquested = 0x25FA;
-	uint16_t DMX_address = 0xC13F;
-	uint16_t Sub_Dev = 0x2AF7;
-	uint64_t LB_PD = 0x0;
-	uint64_t UB_PD = 0xFFFFFFFFFFFF;
-	//uint64_t UID_D = 0x123456789ABC;
-	uint64_t UID_D = 0xFFFFFFFFFFFF;
-	uint64_t UID_S = 0xCBA987654321;
+		uint8_t TN = 0x00;
+		uint8_t ID = 0x01;
+		uint8_t Identify_start_stop = 0x01;
+		uint16_t PID_Resquested = 0x25FA;
+		uint16_t DMX_address = 0xC13F;
+		uint16_t Sub_Dev = 0x2AF7;
+		uint64_t LB_PD = 0x0;
+		uint64_t UB_PD = 0xFFFFFFFFFFFF;
+		//uint64_t UID_D = 0x123456789ABC;
+		uint64_t UID_D = 0xFFFFFFFFFFFF;
+		uint64_t UID_S = 0xCBA987654321;
 
-	uint8_t rxBuffer[MAX_BUFFER_SIZE];
-	uint16_t rxDataLength = 0;
+		uint8_t rxBuffer[MAX_BUFFER_SIZE];
+		uint16_t rxDataLength = 0;
 
-	unsigned char data_send_message[] = "\nData de Envio:\r\n"; //Data to send
-	uint8_t data_received_message[40];
+		unsigned char data_send_message[] = "\nData de Envio:\r\n"; //Data to send
+		uint8_t data_received_message[40];
 
-	/* Envio de dados ----------------------------------------------------------------------------------------------*/
+		/* Envio de dados ----------------------------------------------------------------------------------------------*/
 
-	//uint8_t* dmx_rdm_data = SET_identify_device(UID_D, UID_S, TN, ID, Sub_Dev, Identify_start_stop);
-	//uint8_t* dmx_rdm_data = DISC_unique_branch(UID_D, UID_S, TN, ID, LB_PD, UB_PD);
-	uint8_t dmx_rdm_data[56] = {0x00, 0x00, 0x36, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-													    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
+		//uint8_t* dmx_rdm_data = SET_identify_device(UID_D, UID_S, TN, ID, Sub_Dev, Identify_start_stop);
+		//uint8_t* dmx_rdm_data = DISC_unique_branch(UID_D, UID_S, TN, ID, LB_PD, UB_PD);
+		uint8_t dmx_rdm_data[56] = {0x00, 0x00, 0x36, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
 
-	// Envia para a serial debug os dados a serem enviados
-	unsigned char viewMessage[15];
-	HAL_UART_Transmit(&huart1, data_send_message, sizeof(data_send_message), 10);	// Sending in normal mode
+		// Envia para a serial debug os dados a serem enviados
+		unsigned char viewMessage[15];
+		HAL_UART_Transmit(&huart1, data_send_message, sizeof(data_send_message), 10);	// Sending in normal mode
 
- // Faz a transmissão  de fato
+	 // Faz a transmissão  de fato
 
-	/*HAL_TIM_Base_Start(&htim2);
-	DMX_GPIO_Init(); // Inicia DMX modo GPIO
 
-	DMX_Set_HIGH();
-	delay_us(20);
+		HAL_TIM_Base_Start(&htim2);
 
-	DMX_Set_LOW(); // Setando Break
-	delay_us(176);
+		DMX_GPIO_Init(); // Inicia DMX modo GPIO
+		delay_us(2000); // Delay para começar a comunicar
 
-	DMX_Set_HIGH(); // Setando MAB
-	delay_us(20);
+		DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
 
-	DMX_Set_LOW(); // Setando Break
+		DMX_Set_HIGH();
+		delay_us(20);
 
-	DMX_GPIO_DeInit(); // Desativa o modo GPIO*/
+		DMX_Set_LOW(); // Setando Break
+		delay_us(176);
 
-	DMX_UART_Init();// Inicia novamente o modo USART
+		// O Time after break é implementado pela UART, através do idle frame
 
-	HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
+		DMX_GPIO_DeInit(); // Desativa o modo GPIO
 
-	for(int i = 0; i < dmx_rdm_data[2] + 2; i++){
-			sprintf(viewMessage, "[%d] - 0x%02x\r\n", i, dmx_rdm_data[i]);
+		DMX_UART_Init();// Inicia novamente o modo USART
+
+		HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
+
+		DMX_Set_DE_LOW(); // Desabilita o barramento DMX para escrita (Necessidade do RS485)
+
+		DMX_UART_DeInit;
+
+
+		for(int i = 0; i < dmx_rdm_data[2] + 2; i++){
+				sprintf(viewMessage, "[%d] - 0x%02x\r\n", i, dmx_rdm_data[i]);
+				HAL_UART_Transmit(&huart1, viewMessage, sizeof(viewMessage), TIMEOUT);
+				//HAL_UART_Transmit(&huart2, 0b11001100, 1, TIMEOUT);
+		}
+
+		/* Recepção de dados -----------------------------------------------------------------------------------------------------------*/
+
+		//HAL_UART_Receive(&huart2, data_received_message, 40, TIMEOUT);
+
+		// Envia para a serial debug os dados lidos do RDM
+		unsigned char data_receive_message[] = "\nData de Recebimento:\r\n";
+		HAL_UART_Transmit(&huart1, data_receive_message, sizeof(data_receive_message), 10);	// Sending in normal mode
+		/*for(int i = 0; i < data_received_message[2] + 2; i++){
+			sprintf(viewMessage, "[%d] - 0x%02x\r\n", i, data_received_message[i]);
 			HAL_UART_Transmit(&huart1, viewMessage, sizeof(viewMessage), TIMEOUT);
-			//HAL_UART_Transmit(&huart2, 0b11001100, 1, TIMEOUT);
+		}*/
+
+	  /* USER CODE END 2 */
+
+	  /* Infinite loop */
+	  /* USER CODE BEGIN WHILE */
+	  while (1)
+	  {
+
+	  	DMX_GPIO_Init(); // Inicia DMX modo GPIO
+
+			DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
+
+			DMX_Set_HIGH();
+			delay_us(20);
+
+			DMX_Set_LOW(); // Setando Break
+			delay_us(176);
+
+			// O Time after break é implementado pela UART, através do idle frame
+
+			DMX_GPIO_DeInit(); // Desativa o modo GPIO
+
+			DMX_UART_Init();// Inicia novamente o modo USART
+
+			HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
+
+			DMX_Set_DE_LOW(); // Desabilita o barramento DMX para escrita (Necessidade do RS485)
+
+			DMX_UART_DeInit;
+
+	  }
+	  /* USER CODE END 3 */
+	}
+	static void DMX_GPIO_Init(void){
+		GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+
+		// Configure GPIO pin as output
+		GPIO_InitStruct.Pin = GPIO_PIN_2;
+		GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
 	}
 
-	/* Recepção de dados -----------------------------------------------------------------------------------------------------------*/
-
-	//HAL_UART_Receive(&huart2, data_received_message, 40, TIMEOUT);
-
-	// Envia para a serial debug os dados lidos do RDM
-	unsigned char data_receive_message[] = "\nData de Recebimento:\r\n";
-	HAL_UART_Transmit(&huart1, data_receive_message, sizeof(data_receive_message), 10);	// Sending in normal mode
-	for(int i = 0; i < data_received_message[2] + 2; i++){
-		sprintf(viewMessage, "[%d] - 0x%02x\r\n", i, data_received_message[i]);
-		HAL_UART_Transmit(&huart1, viewMessage, sizeof(viewMessage), TIMEOUT);
+	void delay_us(uint32_t us){
+		__HAL_TIM_SET_COUNTER(&htim2,0);  // set the counter value a 0
+			while (__HAL_TIM_GET_COUNTER(&htim2) < us);  // wait for the counter to reach the us input in the parameter
 	}
 
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
-}
-static void DMX_GPIO_Init(void){
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-
-	// Configure GPIO pin as output
-	GPIO_InitStruct.Pin = GPIO_PIN_2;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-}
-
-void delay_us(uint32_t us){
-	__HAL_TIM_SET_COUNTER(&htim2,0);  // set the counter value a 0
-		while (__HAL_TIM_GET_COUNTER(&htim2) < us);  // wait for the counter to reach the us input in the parameter
-}
-
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+	/**
+	  * @brief System Clock Configuration
+	  * @retval None
+	  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -317,7 +346,7 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_RS485Ex_Init(&huart2, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
+  if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -343,6 +372,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, LD4_Pin|LD3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
@@ -350,6 +382,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DMX_DE_Pin */
+  GPIO_InitStruct.Pin = DMX_DE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DMX_DE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
   GPIO_InitStruct.Pin = LD4_Pin|LD3_Pin;
