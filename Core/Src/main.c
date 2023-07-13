@@ -89,7 +89,7 @@ int main(void)
 
 		//uint8_t* dmx_rdm_data = SET_identify_device(UID_D, UID_S, TN, ID, Sub_Dev, Identify_start_stop);
 		//uint8_t* dmx_rdm_data = DISC_unique_branch(UID_D, UID_S, TN, ID, LB_PD, UB_PD);
-		uint8_t dmx_rdm_data[56] = {0x00, 0x00, 0x36, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		uint8_t dmx_rdm_data[56] = {0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 														    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
@@ -120,7 +120,7 @@ int main(void)
 
 		DMX_UART_Init();// Inicia novamente o modo USART
 
-		HAL_UART_Transmit(&huart2, dmx_rdm_data, dmx_rdm_data[2] + 2, TIMEOUT);
+		HAL_UART_Transmit(&huart2, dmx_rdm_data, 0X36 + 2, TIMEOUT);
 
 		DMX_Set_DE_LOW(); // Desabilita o barramento DMX para escrita (Necessidade do RS485)
 
@@ -152,6 +152,7 @@ int main(void)
 	  while (1)
 	  {
 
+		/*
 	  	DMX_GPIO_Init(); // Inicia DMX modo GPIO
 
 			DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
@@ -174,13 +175,17 @@ int main(void)
 
 			DMX_UART_DeInit;
 
+			delay_us(1000);
+
+*/
+
 	  }
 	  /* USER CODE END 3 */
 	}
 	static void DMX_GPIO_Init(void){
 		GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 
 		// Configure GPIO pin as output
 		GPIO_InitStruct.Pin = GPIO_PIN_2;
