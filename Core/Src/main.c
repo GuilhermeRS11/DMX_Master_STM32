@@ -121,11 +121,42 @@ int main(void)
 	  #ifdef GUI_RDM_DMX
 
 		#define SLOTS_PER_LINK 510
+		#define GUI_addr &huart1
+		#define LIGHTING_addr &huart2
+
 		uint8_t receiveBuffer[SLOTS_PER_LINK];
 
 		while (1){
-					if(HAL_UART_Receive (&huart1, receiveBuffer, SLOTS_PER_LINK, 400) == HAL_OK){
+					/* Recebe o comando vindo da GUI e envia para luminária */
+					/*
+					 * PRECISO FAZER A LEITURA BYTE POR BYTE
+					 * AI EU CONSIGO SABER O TAMANHO DE UM FRAME RDM E CONSIGO RECEBER DADOS, POIS A UART PRECISA SABER O NUMERO DE DADOS A SER RECEBIDO
+					 * FAZER A ALOCAÇÃO DINAMICA DOS DADOS QUE CHEGAM
+					 * DEPOIS DECIDIR O QUE É, O TAMANHO E O QUE FAZER COM ELE
+					 *
+					 * SE POSSIVEL, FAZER ENVIO SIMULTANE, DAI PERCO MENOS TEMPO
+					 *
+					 * TESTAR PRIMEIRO NA SERIAL, DEPOIS VEJO O QUE FAZER
+					 *
+					 * */
+					if(HAL_UART_Receive (GUI_addr, receiveBuffer, SLOTS_PER_LINK, 400) == HAL_OK){
+						/* Se o comando enviado é RDM e deve-se esperar uma resposta */
+						if(receiveBuffer[0] == 0xCC){
+							/* Envia comando RDM */
+							DMX_send_command(receiveBuffer, receiveBuffer[2] + 2);
+
+							/* Recebe o comando RDM da luminária e envia para a GUI */
+							if(HAL_UART_Receive (LIGHTING_addr, receiveBuffer, SLOTS_PER_LINK, 400) == HAL_OK){
+								HAL_UART_Transmit(GUI_addr, receiveBuffer, receiveBuffer[2] + 2, 10);
+							}
+
+						/* Se o comando enviado é DMX, apenas envia o frame*/
+						} else if(receiveBuffer[0] == 0x00){
 							DMX_send_command(receiveBuffer, SLOTS_PER_LINK);
+
+						} else{
+							/* Tratamento de um evento não previsto*/
+						}
 					}
 		}
 		#endif
@@ -151,7 +182,7 @@ void DMX_send_command(uint8_t* frame, uint8_t size){
 
 	DMX_GPIO_DeInit(); // Desativa o modo GPIO
 	DMX_UART_Init();// Inicia novamente o modo USART
-	HAL_UART_Transmit(&huart2, frame, size, TIMEOUT);
+	HAL_UART_Transmit(LIGHTING_addr, frame, size, TIMEOUT);
 
 	DMX_Set_DE_LOW(); // Desabilita o barramento DMX para escrita (Necessidade do RS485)
 	DMX_UART_DeInit;
