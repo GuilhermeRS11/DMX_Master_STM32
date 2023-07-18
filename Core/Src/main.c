@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 /* Macros para utilizar os mesmos pinos como UART e GPIO */
-#define DMX_UART_Init MX_USART2_UART_Init
+#define DMX_UART_Init() MX_USART2_UART_Init()
 #define DMX_UART_DeInit HAL_UART_DeInit(&huart2)
 #define DMX_GPIO_DeInit() HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2); // Desativa o modo GPIO
 #define DMX_Set_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -120,11 +120,19 @@ int main(void)
 
 	  #ifdef GUI_RDM_DMX
 
-		#define SLOTS_PER_LINK 510
 		#define GUI_addr &huart1
 		#define LIGHTING_addr &huart2
 
+		uint16_t SLOTS_PER_LINK = 510;
 		uint8_t receiveBuffer[SLOTS_PER_LINK];
+		uint8_t dataReceived;
+
+		char viewDMX[15];
+		uint16_t receivedIndex = 0;
+		uint8_t GUI_receiveFinished = 0;
+		uint8_t GUI_receive = 1;
+
+		DMX_UART_Init();
 
 		while (1){
 					/* Recebe o comando vindo da GUI e envia para luminária */
@@ -139,23 +147,37 @@ int main(void)
 					 * TESTAR PRIMEIRO NA SERIAL, DEPOIS VEJO O QUE FAZER
 					 *
 					 * */
-					if(HAL_UART_Receive (GUI_addr, receiveBuffer, SLOTS_PER_LINK, 400) == HAL_OK){
-						/* Se o comando enviado é RDM e deve-se esperar uma resposta */
-						if(receiveBuffer[0] == 0xCC){
-							/* Envia comando RDM */
-							DMX_send_command(receiveBuffer, receiveBuffer[2] + 2);
 
-							/* Recebe o comando RDM da luminária e envia para a GUI */
-							if(HAL_UART_Receive (LIGHTING_addr, receiveBuffer, SLOTS_PER_LINK, 400) == HAL_OK){
-								HAL_UART_Transmit(GUI_addr, receiveBuffer, receiveBuffer[2] + 2, 10);
+
+					if(GUI_receive == 1){
+						/* Recebe dados da GUI */
+						if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 20) == HAL_OK){
+							receiveBuffer[receivedIndex] = dataReceived;
+							receivedIndex++;
+							GUI_receiveFinished = 1;
+
+						} else if(GUI_receiveFinished == 1){
+							/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
+							GUI_receiveFinished = 0;
+							DMX_send_command(receiveBuffer, SLOTS_PER_LINK); // AQUI PRECISA SER receivedIndex - 1, MAS NAO TA INDO
+							receivedIndex = 0;
+							if(receiveBuffer[0] == 0xCC){
+								GUI_receive = 0;
 							}
+						}
+					} else{
+						/* Recebe dados da luminaria */
+						if(HAL_UART_Receive (LIGHTING_addr, &dataReceived, 1, 20) == HAL_OK){
+							receiveBuffer[receivedIndex] = dataReceived;
+							receivedIndex++;
+							GUI_receiveFinished = 1;
 
-						/* Se o comando enviado é DMX, apenas envia o frame*/
-						} else if(receiveBuffer[0] == 0x00){
-							DMX_send_command(receiveBuffer, SLOTS_PER_LINK);
-
-						} else{
-							/* Tratamento de um evento não previsto*/
+						} else if(GUI_receiveFinished == 1){
+							/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
+							GUI_receiveFinished = 0;
+							HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, TIMEOUT);
+							receivedIndex = 0;
+							GUI_receive = 1;
 						}
 					}
 		}
