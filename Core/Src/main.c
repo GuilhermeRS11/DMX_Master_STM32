@@ -1,6 +1,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 /* Macros para utilizar os mesmos pinos como UART e GPIO */
 #define DMX_UART_Init() MX_USART2_UART_Init()
@@ -31,7 +32,8 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void DMX_GPIO_Init(void);
-void DMX_send_command(uint8_t* frame, uint8_t size);
+void DMX_send_command(uint8_t* frame, uint16_t size);
+void delay_us(uint32_t us);
 
 /**
   * @brief  The application entry point.
@@ -123,61 +125,67 @@ int main(void)
 		#define GUI_addr &huart1
 		#define LIGHTING_addr &huart2
 
-		uint16_t SLOTS_PER_LINK = 510;
-		uint8_t receiveBuffer[SLOTS_PER_LINK];
+		uint8_t* receiveBuffer = NULL;
 		uint8_t dataReceived;
 
-		char viewDMX[15];
 		uint16_t receivedIndex = 0;
 		uint8_t GUI_receiveFinished = 0;
 		uint8_t GUI_receive = 1;
 
+		uint32_t currentTime;
+
 		DMX_UART_Init();
 
 		while (1){
-					/* Recebe o comando vindo da GUI e envia para luminária */
 					/*
-					 * PRECISO FAZER A LEITURA BYTE POR BYTE
-					 * AI EU CONSIGO SABER O TAMANHO DE UM FRAME RDM E CONSIGO RECEBER DADOS, POIS A UART PRECISA SABER O NUMERO DE DADOS A SER RECEBIDO
-					 * FAZER A ALOCAÇÃO DINAMICA DOS DADOS QUE CHEGAM
-					 * DEPOIS DECIDIR O QUE É, O TAMANHO E O QUE FAZER COM ELE
 					 *
-					 * SE POSSIVEL, FAZER ENVIO SIMULTANE, DAI PERCO MENOS TEMPO
 					 *
-					 * TESTAR PRIMEIRO NA SERIAL, DEPOIS VEJO O QUE FAZER
 					 *
 					 * */
-
 
 					if(GUI_receive == 1){
 						/* Recebe dados da GUI */
 						if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 20) == HAL_OK){
-							receiveBuffer[receivedIndex] = dataReceived;
-							receivedIndex++;
-							GUI_receiveFinished = 1;
+
+							uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
+							receiveBuffer = tempBuffer;
+							receiveBuffer[receivedIndex++] = dataReceived;
+							GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
 
 						} else if(GUI_receiveFinished == 1){
 							/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
-							GUI_receiveFinished = 0;
-							DMX_send_command(receiveBuffer, SLOTS_PER_LINK); // AQUI PRECISA SER receivedIndex - 1, MAS NAO TA INDO
-							receivedIndex = 0;
-							if(receiveBuffer[0] == 0xCC){
-								GUI_receive = 0;
+							DMX_send_command(receiveBuffer, receivedIndex-1); // AQUI PRECISA SER receivedIndex - 1, MAS NAO TA INDO
+
+							if(receiveBuffer[0] == 0xCC){	// Se for um frame DMX, a proxima iteracao sera a espera de um comando vindo da luminaria
+								GUI_receive = 0; /* Entra para a secao que espera o recebimento de dados da luminaria e envia para a GUI*/
+								currentTime = __HAL_TIM_GET_COUNTER(&htim2); /* Inicia timer para definir rota de retorno para este modo*/
 							}
+
+							GUI_receiveFinished = 0;
+							receivedIndex = 0;
+							free(receiveBuffer);
+							receiveBuffer = NULL;
 						}
 					} else{
 						/* Recebe dados da luminaria */
 						if(HAL_UART_Receive (LIGHTING_addr, &dataReceived, 1, 20) == HAL_OK){
-							receiveBuffer[receivedIndex] = dataReceived;
-							receivedIndex++;
-							GUI_receiveFinished = 1;
+							uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
+							receiveBuffer = tempBuffer;
+							receiveBuffer[receivedIndex++] = dataReceived;
+							GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
 
 						} else if(GUI_receiveFinished == 1){
 							/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
+							HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex-1, TIMEOUT);
+
 							GUI_receiveFinished = 0;
-							HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, TIMEOUT);
 							receivedIndex = 0;
-							GUI_receive = 1;
+							GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
+							free(receiveBuffer);
+							receiveBuffer = NULL;
+
+						} else if((currentTime - __HAL_TIM_GET_COUNTER(&htim2)) > 50000){
+							GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
 						}
 					}
 		}
@@ -188,17 +196,17 @@ int main(void)
  * Função que envia o comando DMX seguindo os tempos de MBB, break e MAB exigidos pela norma
  *
  * */
-void DMX_send_command(uint8_t* frame, uint8_t size){
+void DMX_send_command(uint8_t* frame, uint16_t size){
 	DMX_GPIO_Init();   // Inicia DMX modo GPIO
 	//delay_us(2000); 	 // Delay para começar a comunicar
 
 	DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
 
 	DMX_Set_HIGH();		 // Seta o MBB
-	delay_us(20);
+	delay_us(50);
 
 	DMX_Set_LOW(); 		 // Seta o Break
-	delay_us(176);
+	delay_us(250);
 
 	// O Time after break é implementado pela UART, através do idle frame
 
