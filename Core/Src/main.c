@@ -134,6 +134,8 @@ int main(void)
 
 		uint32_t currentTime;
 
+		unsigned char viewDMX[20];
+
 		DMX_UART_Init();
 
 		while (1){
@@ -154,11 +156,12 @@ int main(void)
 
 						} else if(GUI_receiveFinished == 1){
 							/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
-							DMX_send_command(receiveBuffer, receivedIndex-1); // AQUI PRECISA SER receivedIndex - 1, MAS NAO TA INDO
+							DMX_send_command(receiveBuffer, receivedIndex);
 
 							if(receiveBuffer[0] == 0xCC){	// Se for um frame DMX, a proxima iteracao sera a espera de um comando vindo da luminaria
 								GUI_receive = 0; /* Entra para a secao que espera o recebimento de dados da luminaria e envia para a GUI*/
 								currentTime = __HAL_TIM_GET_COUNTER(&htim2); /* Inicia timer para definir rota de retorno para este modo*/
+
 							}
 
 							GUI_receiveFinished = 0;
@@ -176,7 +179,7 @@ int main(void)
 
 						} else if(GUI_receiveFinished == 1){
 							/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
-							HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex-1, TIMEOUT);
+							HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, TIMEOUT);
 
 							GUI_receiveFinished = 0;
 							receivedIndex = 0;
@@ -197,10 +200,12 @@ int main(void)
  *
  * */
 void DMX_send_command(uint8_t* frame, uint16_t size){
+	DMX_UART_DeInit;
 	DMX_GPIO_Init();   // Inicia DMX modo GPIO
-	//delay_us(2000); 	 // Delay para começar a comunicar
+
 
 	DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
+	delay_us(10); 	 	 // Espera um tempo antes de iniciar a transmissao
 
 	DMX_Set_HIGH();		 // Seta o MBB
 	delay_us(50);
@@ -210,12 +215,11 @@ void DMX_send_command(uint8_t* frame, uint16_t size){
 
 	// O Time after break é implementado pela UART, através do idle frame
 
-	DMX_GPIO_DeInit(); // Desativa o modo GPIO
-	DMX_UART_Init();// Inicia novamente o modo USART
-	HAL_UART_Transmit(LIGHTING_addr, frame, size, TIMEOUT);
+	DMX_GPIO_DeInit(); 	// Desativa o modo GPIO
+	DMX_UART_Init();		// Inicia novamente o modo USART
+	HAL_UART_Transmit(LIGHTING_addr, frame, size, 10);
 
 	DMX_Set_DE_LOW(); // Desabilita o barramento DMX para escrita (Necessidade do RS485)
-	DMX_UART_DeInit;
 }
 
 static void DMX_GPIO_Init(void){
