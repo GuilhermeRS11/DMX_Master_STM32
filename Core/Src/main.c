@@ -54,6 +54,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -71,6 +72,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM17_Init(void);
 /* USER CODE BEGIN PFP */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
@@ -118,6 +120,10 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM17_Init();
+
+  HAL_TIM_Base_Init(&htim17);
+  HAL_TIM_Base_Start(&htim17);
   /* USER CODE BEGIN 2 */
 	#define GUI_addr &huart1
 	#define LIGHTING_addr &huart2
@@ -142,7 +148,7 @@ int main(void)
   {
 	if(GUI_receive == 1){
 		/* Recebe dados da GUI */
-		if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 20) == HAL_OK){
+		if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 200) == HAL_OK){
 
 			uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
 			receiveBuffer = tempBuffer;
@@ -186,7 +192,8 @@ int main(void)
 			GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
 		}
 	}
-	/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -279,6 +286,38 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM17 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM17_Init(void)
+{
+
+  /* USER CODE BEGIN TIM17_Init 0 */
+
+  /* USER CODE END TIM17_Init 0 */
+
+  /* USER CODE BEGIN TIM17_Init 1 */
+
+  /* USER CODE END TIM17_Init 1 */
+  htim17.Instance = TIM17;
+  htim17.Init.Prescaler = 48-1;
+  htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim17.Init.Period = 0xffff;
+  htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim17.Init.RepetitionCounter = 0;
+  htim17.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim17) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM17_Init 2 */
+
+  /* USER CODE END TIM17_Init 2 */
 
 }
 
@@ -426,8 +465,8 @@ void DMX_send_command(uint8_t* frame, uint16_t size){
 }
 
 void delay_us(uint32_t us){
-	__HAL_TIM_SET_COUNTER(&htim2,0);  // set the counter value a 0
-		while (__HAL_TIM_GET_COUNTER(&htim2) < us);  // wait for the counter to reach the us input in the parameter
+	__HAL_TIM_SET_COUNTER(&htim17, 0);  // set the counter value a 0
+		while (__HAL_TIM_GET_COUNTER(&htim17) < us);
 }
 
 static void DMX_GPIO_Init(void){
@@ -481,6 +520,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-
-
