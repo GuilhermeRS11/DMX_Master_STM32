@@ -55,7 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-
+extern TIM_HandleTypeDef htim17;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -139,6 +139,24 @@ void SysTick_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32f0xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles TIM17 global interrupt.
+  */
+void TIM17_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM17_IRQn 0 */
+  // Desabilita temporariamente as interrupções e chama a maquina de estados
+  // para enviar a proxima parte do frame DMX
+  __HAL_TIM_DISABLE_IT(&htim17, TIM_IT_UPDATE);
+  DMX_SendHandler();
+
+  /* USER CODE END TIM17_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim17);
+  /* USER CODE BEGIN TIM17_IRQn 1 */
+
+  /* USER CODE END TIM17_IRQn 1 */
+}
 
 /* USER CODE BEGIN 1 */
 
