@@ -71,10 +71,10 @@ void Error_Handler(void);
 #define LD4_GPIO_Port GPIOC
 #define LD3_Pin GPIO_PIN_9
 #define LD3_GPIO_Port GPIOC
-#define debug_TX_Pin GPIO_PIN_9
-#define debug_TX_GPIO_Port GPIOA
-#define debug_RX_Pin GPIO_PIN_10
-#define debug_RX_GPIO_Port GPIOA
+#define USB_TX_Pin GPIO_PIN_9
+#define USB_TX_GPIO_Port GPIOA
+#define USB_RX_Pin GPIO_PIN_10
+#define USB_RX_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14

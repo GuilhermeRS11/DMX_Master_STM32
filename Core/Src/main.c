@@ -24,6 +24,7 @@
 #include "DMX.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,10 +47,14 @@
 #define DMX_UART_Init() MX_USART2_UART_Init()
 #define DMX_UART_DeInit HAL_UART_DeInit(&huart2)
 #define DMX_GPIO_DeInit() HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2); // Desativa o modo GPIO
-#define DMX_Set_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-#define DMX_Set_HIGH() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+#define DMX_Set_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+#define DMX_Set_HIGH() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 #define DMX_Set_DE_LOW() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
 #define DMX_Set_DE_HIGH() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_SET);
+
+#define HEADER_BUFFER_SIZE 5
+#define GUI_addr &huart1
+#define LIGHTING_addr &huart2
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -58,6 +63,9 @@ TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
+DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 // Defina os estados da máquina de estados para o envio DMX
@@ -74,21 +82,29 @@ DMX_State dmx_state = STATE_IDLE;
 uint16_t dmx_index = 0;
 uint16_t receivedIndex = 0;
 uint8_t* receiveBuffer = NULL;
+
+typedef struct {
+    uint8_t *data;
+    uint16_t capacity;
+} DynamicFrame;
+
+DynamicFrame currentFrame = {0};
+uint8_t header_sequence[] = {0x7E, 0x06, 0x3A};
+uint8_t tail_sequence[] = {0x7E, 0x06, 0x3B};
+uint8_t uartBuffer[HEADER_BUFFER_SIZE];
+uint8_t* DMX_buffer_toSend = NULL;
+uint16_t DMX_buffer_toSend_Size = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM17_Init(void);
 /* USER CODE BEGIN PFP */
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_TIM2_Init(void);
 static void DMX_GPIO_Init(void);
 void DMX_SendHandler(void);
 void startTiming(void);
@@ -97,7 +113,74 @@ void stopTiming(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (currentFrame.data == NULL) {
+    	// Cabeçalho e tamanho dos dados detectados, continua a leitura dos dados
+		if ((uartBuffer[0] == header_sequence[0]) &&
+			(uartBuffer[1] == header_sequence[1]) &&
+			(uartBuffer[2] == header_sequence[2])) {
+			// Cabeçalho detectado, continua a leitura do tamanho dos dados
+			currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
+			currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
+			if (currentFrame.data != NULL) {
+				// Continua a recepção dos dados e rodapé
+				HAL_UART_Receive_DMA(huart, currentFrame.data, currentFrame.capacity);
+			} else {
+				// Falha na alocação de memória, lidar com isso conforme necessário
+				free(currentFrame.data);
+				currentFrame.data = NULL;
+				HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+			}
+		}
 
+    } else {
+    	uint16_t DataSize = currentFrame.capacity;
+    	// Se o rodapé estiver correto, processa o frame
+    	if ((currentFrame.data[DataSize-3] == tail_sequence[0]) &&
+    		(currentFrame.data[DataSize-2] == tail_sequence[1]) &&
+			(currentFrame.data[DataSize-1] == tail_sequence[2])) {
+
+    		// Libera a memória anteriormente alocada se necessário
+			if (DMX_buffer_toSend != NULL)
+				free(DMX_buffer_toSend);
+
+    		DMX_buffer_toSend_Size = currentFrame.capacity;
+    		DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
+
+            // Verifica se a alocação de memória foi bem-sucedida antes de copiar os dados
+    		if (DMX_buffer_toSend != NULL) {
+				memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
+				dmx_state = STATE_PREPARE;
+				DMX_SendHandler();
+			} else {
+				// Lida com a falha na alocação de memória, se necessário
+			}
+    		dmx_state = STATE_PREPARE;
+			DMX_SendHandler();
+
+    	} else {
+    		// Se tiver errado, ignora os dados recebidos
+    	}
+    	// Prepara nova recepção
+    	free(currentFrame.data);
+    	currentFrame.data = NULL;
+    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+    }
+}
+
+// Função para lidar com a transmissão concluída
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    // Este callback será chamado quando a transmissão for concluída
+	DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
+	dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
+
+	// libera o buffer de recebimento de dados
+	DMX_buffer_toSend_Size = 0;
+	free(DMX_buffer_toSend);
+	DMX_buffer_toSend = NULL;
+
+}
 /* USER CODE END 0 */
 
 /**
@@ -128,6 +211,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
@@ -147,63 +231,67 @@ int main(void)
 	DMX_UART_Init();
 	HAL_TIM_Base_Start(&htim17);
 	HAL_TIM_Base_Start(&htim2);
+
+	// Inicializa a DMA para a recepção UART
+	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	if(GUI_receive == 1){
-		/* Recebe dados da GUI */
 
-		if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 2) == HAL_OK){
-			uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
-			receiveBuffer = tempBuffer;
-			receiveBuffer[receivedIndex++] = dataReceived;
-			GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
-
-		} else if(GUI_receiveFinished == 1){
-
-			/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
-			if(receivedIndex > 5){ //Verifica se há dados para serem repassados
-				dmx_state = STATE_PREPARE;
-				DMX_SendHandler();
-			}
-
-			if(receiveBuffer[0] == 0xCC){	// Se for um frame RDM, a proxima iteracao sera a espera de um comando vindo da luminaria
-				GUI_receive = 0; /* Entra para a secao que espera o recebimento de dados da luminaria e envia para a GUI*/
-				currentTime = __HAL_TIM_GET_COUNTER(&htim2); /* Inicia timer para definir rota de retorno para este modo*/
-
-			}
-
-			GUI_receiveFinished = 0;
+//	if(GUI_receive == 1){
+//		/* Recebe dados da GUI */
+//
+//		if(HAL_UART_Receive (GUI_addr, &dataReceived, 1, 2) == HAL_OK){
+//			uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
+//			receiveBuffer = tempBuffer;
+//			receiveBuffer[receivedIndex++] = dataReceived;
+//			GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
+//
+//		} else if(GUI_receiveFinished == 1){
+//
+//			/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
+//			if(receivedIndex > 5){ //Verifica se há dados para serem repassados
+//				dmx_state = STATE_PREPARE;
+//				DMX_SendHandler();
+//			}
+//
+//			if(receiveBuffer[0] == 0xCC){	// Se for um frame RDM, a proxima iteracao sera a espera de um comando vindo da luminaria
+//				GUI_receive = 0; /* Entra para a secao que espera o recebimento de dados da luminaria e envia para a GUI*/
+//				currentTime = __HAL_TIM_GET_COUNTER(&htim2); /* Inicia timer para definir rota de retorno para este modo*/
+//
+//			}
+//
+//			GUI_receiveFinished = 0;
+////			receivedIndex = 0;
+////			free(receiveBuffer);
+////			receiveBuffer = NULL;
+//		}
+//	} else{
+//		/* Recebe dados da luminaria */
+//		if(HAL_UART_Receive (LIGHTING_addr, &dataReceived, 1, 1) == HAL_OK){
+//			uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
+//			receiveBuffer = tempBuffer;
+//			receiveBuffer[receivedIndex++] = dataReceived;
+//			GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
+//
+//		} else if(GUI_receiveFinished == 1){
+//			/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
+//			if(receivedIndex > 1)//Verifica se há dados para serem repassados
+//				HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, 1);
+//
+//			GUI_receiveFinished = 0;
 //			receivedIndex = 0;
+//			GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
 //			free(receiveBuffer);
 //			receiveBuffer = NULL;
-		}
-	} else{
-		/* Recebe dados da luminaria */
-		if(HAL_UART_Receive (LIGHTING_addr, &dataReceived, 1, 1) == HAL_OK){
-			uint8_t* tempBuffer = (uint8_t*)realloc(receiveBuffer, (receivedIndex + 1) * sizeof(uint8_t)); /* Buffer temporario para alocacao dinamica*/
-			receiveBuffer = tempBuffer;
-			receiveBuffer[receivedIndex++] = dataReceived;
-			GUI_receiveFinished = 1; /* Avisa que quando acabar o recebimento de bytes, pode enviar para a luminaria*/
-
-		} else if(GUI_receiveFinished == 1){
-			/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
-			if(receivedIndex > 1)//Verifica se há dados para serem repassados
-				HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, 1);
-
-			GUI_receiveFinished = 0;
-			receivedIndex = 0;
-			GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
-			free(receiveBuffer);
-			receiveBuffer = NULL;
-
-		} else if((currentTime - __HAL_TIM_GET_COUNTER(&htim2)) > TIME_WAIT_RDM_RESPONSE){
-			GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
-		}
-	}
+//
+//		} else if((currentTime - __HAL_TIM_GET_COUNTER(&htim2)) > TIME_WAIT_RDM_RESPONSE){
+//			GUI_receive = 1; /* Volta para o recebimento de dados da GUI e envio para a luminaria*/
+//		}
+//	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -349,7 +437,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 250000;
+  huart1.Init.BaudRate = 500000;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_2;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -393,13 +481,32 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
+  if (HAL_RS485Ex_Init(&huart2, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel2_3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+  /* DMA1_Channel4_5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_5_IRQn);
 
 }
 
@@ -421,9 +528,6 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, Timing_test_Pin|LD4_Pin|LD3_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
-
   /*Configure GPIO pin : Timing_test_Pin */
   GPIO_InitStruct.Pin = Timing_test_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -436,13 +540,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : DMX_DE_Pin */
-  GPIO_InitStruct.Pin = DMX_DE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(DMX_DE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
   GPIO_InitStruct.Pin = LD4_Pin|LD3_Pin;
@@ -520,17 +617,19 @@ void DMX_SendHandler(void) {
         	DMX_GPIO_DeInit(); 	// Desativa o modo GPIO
 			DMX_UART_Init();		// Inicia novamente o modo USART
 
-        	HAL_UART_Transmit(LIGHTING_addr, receiveBuffer, receivedIndex, 50);
-        	stopTiming();
-
-			DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
-			dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
-
-			// libera o buffer de recebimento de dados
-			receivedIndex = 0;
-			free(receiveBuffer);
-			receiveBuffer = NULL;
+			HAL_UART_Transmit_DMA(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
+        	//stopTiming();
+//			DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
+//			dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
+//
+//			// libera o buffer de recebimento de dados
+//			DMX_buffer_toSend_Size = 0;
+//			free(DMX_buffer_toSend);
+//			DMX_buffer_toSend = NULL;
+			// Final da transmissão é feita no callback de transmissão DMA
             break;
+
+
     }
 }
 
