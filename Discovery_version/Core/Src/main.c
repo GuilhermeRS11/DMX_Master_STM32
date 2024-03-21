@@ -94,6 +94,7 @@ uint8_t tail_sequence[] = {0x7E, 0x06, 0x3B};
 uint8_t uartBuffer[HEADER_BUFFER_SIZE];
 uint8_t* DMX_buffer_toSend = NULL;
 uint16_t DMX_buffer_toSend_Size = 0;
+uint8_t process_frame = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,6 +120,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		if ((uartBuffer[0] == header_sequence[0]) &&
 			(uartBuffer[1] == header_sequence[1]) &&
 			(uartBuffer[2] == header_sequence[2])) {
+
 			// Cabeçalho detectado, continua a leitura do tamanho dos dados
 			currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
 			currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
@@ -129,8 +131,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				// Falha na alocação de memória, lidar com isso conforme necessário
 				free(currentFrame.data);
 				currentFrame.data = NULL;
+//				HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn); //Libera para receber um novo frame
 				HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 			}
+
 		}
 
     } else {
@@ -140,31 +144,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     		(currentFrame.data[DataSize-2] == tail_sequence[1]) &&
 			(currentFrame.data[DataSize-1] == tail_sequence[2])) {
 
-    		// Libera a memória anteriormente alocada se necessário
-			if (DMX_buffer_toSend != NULL)
-				free(DMX_buffer_toSend);
-
-    		DMX_buffer_toSend_Size = currentFrame.capacity;
-    		DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
-
-            // Verifica se a alocação de memória foi bem-sucedida antes de copiar os dados
-    		if (DMX_buffer_toSend != NULL) {
-				memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
-				dmx_state = STATE_PREPARE;
-				DMX_SendHandler();
-			} else {
-				// Lida com a falha na alocação de memória, se necessário
-			}
-    		dmx_state = STATE_PREPARE;
-			DMX_SendHandler();
+			process_frame = 1; //Processa o frame
 
     	} else {
     		// Se tiver errado, ignora os dados recebidos
     	}
-    	// Prepara nova recepção
-    	free(currentFrame.data);
-    	currentFrame.data = NULL;
-    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+
     }
 }
 
@@ -240,6 +225,36 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+
+//	if(process_frame == 0 && &huart1.Lock == HAL_UNLOCKED){
+//		HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+//	}
+
+	if(process_frame){
+		// Libera a memória anteriormente alocada se necessário
+		if (DMX_buffer_toSend != NULL)
+			free(DMX_buffer_toSend);
+
+		DMX_buffer_toSend_Size = currentFrame.capacity - 3;
+		DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
+
+		// Verifica se a alocação de memória foi bem-sucedida antes de copiar os dados
+		if (DMX_buffer_toSend != NULL) {
+			memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
+			dmx_state = STATE_PREPARE;
+			DMX_SendHandler();
+		} else {
+			// Lida com a falha na alocação de memória, se necessário
+		}
+
+		process_frame = 0;
+
+    	// Prepara nova recepção
+    	free(currentFrame.data);
+    	currentFrame.data = NULL;
+    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+	}
 
 //	if(GUI_receive == 1){
 //		/* Recebe dados da GUI */
@@ -365,7 +380,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 48-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 10000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -437,7 +452,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 500000;
+  huart1.Init.BaudRate = 250000;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_2;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -618,6 +633,8 @@ void DMX_SendHandler(void) {
 			DMX_UART_Init();		// Inicia novamente o modo USART
 
 			HAL_UART_Transmit_DMA(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
+			dmx_state = STATE_IDLE;
+
         	//stopTiming();
 //			DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
 //			dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
@@ -634,9 +651,12 @@ void DMX_SendHandler(void) {
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
-    if (htim->Instance == TIM17) {
-        // Lógica a ser executada quando ocorre a interrupção do Timer
-    }
+//    if (htim->Instance == TIM2) {
+//		free(currentFrame.data);
+//		currentFrame.data = NULL;
+//		HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+//		HAL_NVIC_DisableIRQ(TIM2_IRQn);
+//    }
 }
 
 
