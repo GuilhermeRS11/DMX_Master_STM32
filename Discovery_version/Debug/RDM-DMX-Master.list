@@ -950,7 +950,7 @@ static void MX_USART1_UART_Init(void)
  800062c:	4b14      	ldr	r3, [pc, #80]	; (8000680 <MX_USART1_UART_Init+0x58>)
  800062e:	4a15      	ldr	r2, [pc, #84]	; (8000684 <MX_USART1_UART_Init+0x5c>)
  8000630:	601a      	str	r2, [r3, #0]
-  huart1.Init.BaudRate = 250000;
+  huart1.Init.BaudRate = 500000;
  8000632:	4b13      	ldr	r3, [pc, #76]	; (8000680 <MX_USART1_UART_Init+0x58>)
  8000634:	4a14      	ldr	r2, [pc, #80]	; (8000688 <MX_USART1_UART_Init+0x60>)
  8000636:	605a      	str	r2, [r3, #4]
@@ -1007,7 +1007,7 @@ static void MX_USART1_UART_Init(void)
  800067e:	bd80      	pop	{r7, pc}
  8000680:	20000110 	.word	0x20000110
  8000684:	40013800 	.word	0x40013800
- 8000688:	0003d090 	.word	0x0003d090
+ 8000688:	0007a120 	.word	0x0007a120
 
 0800068c <MX_USART2_UART_Init>:
   * @brief USART2 Initialization Function
@@ -1418,7 +1418,7 @@ void DMX_SendHandler(void) {
 			DMX_Set_HIGH(); // Setar o MBB
  80008d0:	2390      	movs	r3, #144	; 0x90
  80008d2:	05db      	lsls	r3, r3, #23
- 80008d4:	2201      	movs	r2, #1
+ 80008d4:	2200      	movs	r2, #0
  80008d6:	2104      	movs	r1, #4
  80008d8:	0018      	movs	r0, r3
  80008da:	f001 f835 	bl	8001948 <HAL_GPIO_WritePin>
@@ -1451,7 +1451,7 @@ void DMX_SendHandler(void) {
             DMX_Set_LOW();  // Setar o Break
  8000902:	2390      	movs	r3, #144	; 0x90
  8000904:	05db      	lsls	r3, r3, #23
- 8000906:	2200      	movs	r2, #0
+ 8000906:	2201      	movs	r2, #1
  8000908:	2104      	movs	r1, #4
  800090a:	0018      	movs	r0, r3
  800090c:	f001 f81c 	bl	8001948 <HAL_GPIO_WritePin>
