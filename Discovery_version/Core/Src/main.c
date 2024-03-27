@@ -64,7 +64,6 @@ TIM_HandleTypeDef htim17;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
@@ -95,6 +94,7 @@ uint8_t uartBuffer[HEADER_BUFFER_SIZE];
 uint8_t* DMX_buffer_toSend = NULL;
 uint16_t DMX_buffer_toSend_Size = 0;
 uint8_t process_frame = 0;
+uint8_t data_already_send = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -115,56 +115,68 @@ void stopTiming(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (currentFrame.data == NULL) {
-    	// Cabeçalho e tamanho dos dados detectados, continua a leitura dos dados
-		if ((uartBuffer[0] == header_sequence[0]) &&
-			(uartBuffer[1] == header_sequence[1]) &&
-			(uartBuffer[2] == header_sequence[2])) {
+    if(huart == GUI_addr){
+    	TIM2->CNT = 0; // Zera o timer que reseta uart em eventos de travamento
+    	if (currentFrame.data == NULL) {
+			// Cabeçalho e tamanho dos dados detectados, continua a leitura dos dados
+			if ((uartBuffer[0] == header_sequence[0]) &&
+				(uartBuffer[1] == header_sequence[1]) &&
+				(uartBuffer[2] == header_sequence[2])) {
 
-			// Cabeçalho detectado, continua a leitura do tamanho dos dados
-			currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
-			currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
-			if (currentFrame.data != NULL) {
-				// Continua a recepção dos dados e rodapé
-				HAL_UART_Receive_DMA(huart, currentFrame.data, currentFrame.capacity);
-			} else {
-				// Falha na alocação de memória, lidar com isso conforme necessário
+				// Cabeçalho detectado, continua a leitura do tamanho dos dados
+				currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
+				currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
+				if (currentFrame.data != NULL) {
+					// Continua a recepção dos dados e rodapé
+					HAL_UART_Receive_DMA(huart, currentFrame.data, currentFrame.capacity);
+				} else {
+					// Falha na alocação de memória, lidar com isso conforme necessário
+					free(currentFrame.data);
+					currentFrame.data = NULL;
+					HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
+				}
+
+			} else{ // O cabeçalho está errado e precisar esperar a recepção de novos dados
 				free(currentFrame.data);
 				currentFrame.data = NULL;
-//				HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn); //Libera para receber um novo frame
-				HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+				HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
 			}
 
+		} else {
+			uint16_t DataSize = currentFrame.capacity;
+			// Se o rodapé estiver correto, processa o frame
+			if ((currentFrame.data[DataSize-3] == tail_sequence[0]) &&
+				(currentFrame.data[DataSize-2] == tail_sequence[1]) &&
+				(currentFrame.data[DataSize-1] == tail_sequence[2])) {
+
+				process_frame = 1; //Processa o frame
+
+			} else {
+				// Se tiver errado, ignora os dados recebidos e espera recepção de novas dados
+				free(currentFrame.data);
+				currentFrame.data = NULL;
+				HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
+			}
+
+			HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
 		}
-
-    } else {
-    	uint16_t DataSize = currentFrame.capacity;
-    	// Se o rodapé estiver correto, processa o frame
-    	if ((currentFrame.data[DataSize-3] == tail_sequence[0]) &&
-    		(currentFrame.data[DataSize-2] == tail_sequence[1]) &&
-			(currentFrame.data[DataSize-1] == tail_sequence[2])) {
-
-			process_frame = 1; //Processa o frame
-
-    	} else {
-    		// Se tiver errado, ignora os dados recebidos
-    	}
-
     }
 }
 
 // Função para lidar com a transmissão concluída
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-    // Este callback será chamado quando a transmissão for concluída
-	DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
-	dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
+	if (huart == &huart2){
+		 // Este callback será chamado quando a transmissão for concluída
+		DMX_Set_DE_LOW();  		 // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
+		dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
 
-	// libera o buffer de recebimento de dados
-	DMX_buffer_toSend_Size = 0;
-	free(DMX_buffer_toSend);
-	DMX_buffer_toSend = NULL;
-
+		// Libera o buffer de recebimento de dados
+		DMX_buffer_toSend_Size = 0;
+		free(DMX_buffer_toSend);
+		DMX_buffer_toSend = NULL;
+		data_already_send = 1; // Flag para indicar que os dados foram enviados
+	}
 }
 /* USER CODE END 0 */
 
@@ -215,10 +227,12 @@ int main(void)
 
 	DMX_UART_Init();
 	HAL_TIM_Base_Start(&htim17);
-	HAL_TIM_Base_Start(&htim2);
+	HAL_TIM_Base_Start_IT(&htim2);
 
 	// Inicializa a DMA para a recepção UART
 	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -226,12 +240,11 @@ int main(void)
   while (1)
   {
 
-
 //	if(process_frame == 0 && &huart1.Lock == HAL_UNLOCKED){
 //		HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 //	}
 
-	if(process_frame){
+	if(process_frame && data_already_send){
 		// Libera a memória anteriormente alocada se necessário
 		if (DMX_buffer_toSend != NULL)
 			free(DMX_buffer_toSend);
@@ -243,6 +256,7 @@ int main(void)
 		if (DMX_buffer_toSend != NULL) {
 			memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
 			dmx_state = STATE_PREPARE;
+			data_already_send = 0;
 			DMX_SendHandler();
 		} else {
 			// Lida com a falha na alocação de memória, se necessário
@@ -253,7 +267,7 @@ int main(void)
     	// Prepara nova recepção
     	free(currentFrame.data);
     	currentFrame.data = NULL;
-    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+//    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 	}
 
 //	if(GUI_receive == 1){
@@ -380,7 +394,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 48-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 10000;
+  htim2.Init.Period = 100000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -496,7 +510,7 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_RS485Ex_Init(&huart2, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
+  if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -543,6 +557,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, Timing_test_Pin|LD4_Pin|LD3_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : Timing_test_Pin */
   GPIO_InitStruct.Pin = Timing_test_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -555,6 +572,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DMX_DE_Pin */
+  GPIO_InitStruct.Pin = DMX_DE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DMX_DE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
   GPIO_InitStruct.Pin = LD4_Pin|LD3_Pin;
@@ -631,19 +655,10 @@ void DMX_SendHandler(void) {
         case STATE_DATA:
         	DMX_GPIO_DeInit(); 	// Desativa o modo GPIO
 			DMX_UART_Init();		// Inicia novamente o modo USART
-
-			HAL_UART_Transmit_DMA(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
 			dmx_state = STATE_IDLE;
-
-        	//stopTiming();
-//			DMX_Set_DE_LOW();  // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
-//			dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
-//
-//			// libera o buffer de recebimento de dados
-//			DMX_buffer_toSend_Size = 0;
-//			free(DMX_buffer_toSend);
-//			DMX_buffer_toSend = NULL;
+			HAL_UART_Transmit_IT(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
 			// Final da transmissão é feita no callback de transmissão DMA
+			HAL_NVIC_EnableIRQ(TIM2_IRQn); // Ativa TIM2 para verificar error na recepção de dados
             break;
 
 
