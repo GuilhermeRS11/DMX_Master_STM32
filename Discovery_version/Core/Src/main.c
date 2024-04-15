@@ -36,6 +36,8 @@
 /* USER CODE BEGIN PD */
 #define TIMEOUT 100
 #define NUM_CHANNELS 40
+#define MINIMAL_BREAK_TIME 80 //80us (por norma o minimo é 88us)
+#define MINIMAL_MAB_TIME 8 //8us (por norma o minimo é 12us)
 //#define DEBUG_RDM
 //#define DEBUG_DMX
 #define GUI_RDM_DMX
@@ -59,6 +61,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim14;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
@@ -95,6 +98,14 @@ uint8_t* DMX_buffer_toSend = NULL;
 uint16_t DMX_buffer_toSend_Size = 0;
 uint8_t process_frame = 0;
 uint8_t data_already_send = 1;
+uint16_t Frame_Size = 0;
+uint16_t UART2_rxBuffer_Size = 0;
+uint8_t UART2_on_Start = 0;
+uint8_t UART2_rxBuffer[1024];
+uint8_t UART2_Begin_rxBuffer[3];
+uint8_t on_MAB = 0;
+uint8_t on_break_mark = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,6 +116,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM17_Init(void);
+static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 static void DMX_GPIO_Init(void);
 void DMX_SendHandler(void);
@@ -161,6 +173,47 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 			HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
 		}
     }
+
+    if (huart == LIGHTING_addr){
+    	// Corresponde a UART da interface RS485
+
+		/* Recebe os primeiros 3 bytes do frame.
+		 * Se for DMX espera receber 256 bytes
+		 * Se for RDM espera receber o tamanho designado para o frame */
+
+		if(huart->ErrorCode != 0){
+			HAL_UART_DeInit(huart);
+			HAL_UART_Init(huart);
+			#ifdef DEBUG_PYSICAL
+				Debug_write_string("\n\rOcorreu um erro no recebimento e os dados não serão processados");
+			#endif
+
+		} else {
+
+			if (UART2_on_Start){
+				/* Se a UART receceu os 3 bytes de inicio, então testa se é RDM ou DMX
+				 * e prapara o recebimento do restante dos dados
+				 *
+				 * */
+
+				UART2_on_Start = 0;
+
+				if (UART2_Begin_rxBuffer[0] == 0xCC){
+					uint16_t Frame_Size = UART2_rxBuffer_Size - 3;
+					HAL_UART_Receive_IT(huart, UART2_rxBuffer, Frame_Size);
+
+				} else{
+					// Tratamento quando o dado recebido não é DMX nem RDM
+					HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
+				}
+
+			} else {
+				HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
+				// Envia o frame para a interface grafica
+
+			}
+		}
+	}
 }
 
 // Função para lidar com a transmissão concluída
@@ -176,8 +229,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		free(DMX_buffer_toSend);
 		DMX_buffer_toSend = NULL;
 		data_already_send = 1; // Flag para indicar que os dados foram enviados
+
 	}
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -213,25 +268,24 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM2_Init();
   MX_TIM17_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
-	#define GUI_addr &huart1
-	#define LIGHTING_addr &huart2
+  #define GUI_addr &huart1
+  #define LIGHTING_addr &huart2
 
-	uint8_t dataReceived;
+  uint8_t dataReceived;
+  uint8_t GUI_receiveFinished = 0;
+  uint8_t GUI_receive = 1;
+  uint32_t currentTime;
 
-	uint8_t GUI_receiveFinished = 0;
-	uint8_t GUI_receive = 1;
-	uint32_t currentTime;
+  unsigned char viewDMX[20];
 
-	unsigned char viewDMX[20];
+  DMX_UART_Init();
+  HAL_TIM_Base_Start(&htim17);
+  HAL_TIM_Base_Start_IT(&htim2);
 
-	DMX_UART_Init();
-	HAL_TIM_Base_Start(&htim17);
-	HAL_TIM_Base_Start_IT(&htim2);
-
-	// Inicializa a DMA para a recepção UART
-	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
-
+  // Inicializa a DMA para a recepção UART
+  HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 
   /* USER CODE END 2 */
 
@@ -268,6 +322,7 @@ int main(void)
     	free(currentFrame.data);
     	currentFrame.data = NULL;
 //    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
+
 	}
 
 //	if(GUI_receive == 1){
@@ -415,6 +470,51 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 48-1;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 65535;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim14, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
 
 }
 
@@ -567,6 +667,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(Timing_test_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : Break_detection_Pin */
+  GPIO_InitStruct.Pin = Break_detection_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(Break_detection_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
@@ -660,20 +766,54 @@ void DMX_SendHandler(void) {
 			// Final da transmissão é feita no callback de transmissão DMA
 			HAL_NVIC_EnableIRQ(TIM2_IRQn); // Ativa TIM2 para verificar error na recepção de dados
             break;
-
-
     }
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
-//    if (htim->Instance == TIM2) {
-//		free(currentFrame.data);
-//		currentFrame.data = NULL;
-//		HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
-//		HAL_NVIC_DisableIRQ(TIM2_IRQn);
-//    }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin == Break_detection_Pin){
+		uint8_t currentButtonState = HAL_GPIO_ReadPin(Break_detection_GPIO_Port, Break_detection_Pin);
+		if(currentButtonState == 0){ // Borda de 1 - 0 (Detecta o break)
+			if(on_break_mark){
+				TIM14->CNT = 0;
+				UART2_on_Start = 1;
+				//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
+
+			} else if (on_MAB) {
+				//Confere se o break 00é pelo menos 80us
+				//uint32_t tempo = TIM14->CNT;
+				if(TIM14->CNT > MINIMAL_BREAK_TIME && UART2_on_Start){
+					//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
+					// Avalia se o tempo de brak foi atingido. Se sim, passa para avaliação do MAB
+					on_break_mark = 0;
+					on_MAB = 1;
+					TIM14->CNT = 0;
+				}
+			}
+
+		} else{						 // Borda de 0 - 1 (Confere se o break 00é pelo menos 80us)
+			//uint32_t tempo = TIM14->CNT;
+			if(TIM14->CNT > MINIMAL_BREAK_TIME && UART2_on_Start){
+				//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
+				HAL_NVIC_DisableIRQ(EXTI0_1_IRQn); //Trava a recepção de sinais que não sejam break
+
+				HAL_UART_Init(LIGHTING_addr);
+				HAL_UART_Receive_DMA(LIGHTING_addr, UART2_Begin_rxBuffer, 3);
+
+			}
+		}
+	}
 }
 
+// Verifica se ocorreu um erro no recebimento dos dados que pode travar a recepção
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM14) {  // Verifica se o callback é para o timer TIM14
+		HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
+		on_break_mark = 1;
+		on_MAB = 0;
+	}
+}
 
 // Função para iniciar a temporização
 void startTiming() {

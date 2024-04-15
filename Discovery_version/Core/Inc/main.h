@@ -59,6 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define Timing_test_Pin GPIO_PIN_0
 #define Timing_test_GPIO_Port GPIOC
+#define Break_detection_Pin GPIO_PIN_1
+#define Break_detection_GPIO_Port GPIOC
 #define B1_Pin GPIO_PIN_0
 #define B1_GPIO_Port GPIOA
 #define DMX_DE_Pin GPIO_PIN_1
