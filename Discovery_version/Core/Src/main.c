@@ -54,7 +54,7 @@
 #define DMX_Set_DE_LOW() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
 #define DMX_Set_DE_HIGH() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_SET);
 
-#define HEADER_BUFFER_SIZE 5
+#define HEADER_BUFFER_SIZE 9
 #define GUI_addr &huart1
 #define LIGHTING_addr &huart2
 /* USER CODE END PM */
@@ -93,6 +93,10 @@ typedef struct {
 DynamicFrame currentFrame = {0};
 uint8_t header_sequence[] = {0x7E, 0x06, 0x3A};
 uint8_t tail_sequence[] = {0x7E, 0x06, 0x3B};
+uint8_t TBB_value = 0;
+uint8_t TBF_value = 0;
+uint8_t break_time_value = 88;
+uint8_t countinuous_DMX_send = 0;
 uint8_t uartBuffer[HEADER_BUFFER_SIZE];
 uint8_t* DMX_buffer_toSend = NULL;
 uint16_t DMX_buffer_toSend_Size = 0;
@@ -105,6 +109,7 @@ uint8_t UART2_rxBuffer[1024];
 uint8_t UART2_Begin_rxBuffer[3];
 uint8_t on_MAB = 0;
 uint8_t on_break_mark = 0;
+uint8_t data_sent;
 
 /* USER CODE END PV */
 
@@ -138,6 +143,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				// Cabeçalho detectado, continua a leitura do tamanho dos dados
 				currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
 				currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
+
+				// Coloca os dados extras nos frames
+				TBB_value = uartBuffer[5];
+				TBF_value = uartBuffer[6];
+				break_time_value = uartBuffer[7];
+				countinuous_DMX_send = uartBuffer[8];
+
 				if (currentFrame.data != NULL) {
 					// Continua a recepção dos dados e rodapé
 					HAL_UART_Receive_DMA(huart, currentFrame.data, currentFrame.capacity);
@@ -223,12 +235,15 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		 // Este callback será chamado quando a transmissão for concluída
 		DMX_Set_DE_LOW();  		 // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
 		dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
+		data_sent = 1;
 
 		// Libera o buffer de recebimento de dados
-		DMX_buffer_toSend_Size = 0;
-		free(DMX_buffer_toSend);
-		DMX_buffer_toSend = NULL;
-		data_already_send = 1; // Flag para indicar que os dados foram enviados
+		if (!countinuous_DMX_send){
+			DMX_buffer_toSend_Size = 0;
+			free(DMX_buffer_toSend);
+			DMX_buffer_toSend = NULL;
+			data_already_send = 1; // Flag para indicar que os dados foram enviados
+		}
 
 	}
 }
@@ -298,16 +313,21 @@ int main(void)
 //		HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 //	}
 
-	if(process_frame && data_already_send){
+	if(process_frame && (data_already_send || data_sent)){
 		// Libera a memória anteriormente alocada se necessário
+		DMX_buffer_toSend_Size = 0;
+		free(DMX_buffer_toSend);
+		DMX_buffer_toSend = NULL;
+
 		if (DMX_buffer_toSend != NULL)
 			free(DMX_buffer_toSend);
 
-		DMX_buffer_toSend_Size = currentFrame.capacity - 3;
+		DMX_buffer_toSend_Size = currentFrame.capacity - 5;
 		DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
 
 		// Verifica se a alocação de memória foi bem-sucedida antes de copiar os dados
 		if (DMX_buffer_toSend != NULL) {
+
 			memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
 			dmx_state = STATE_PREPARE;
 			data_already_send = 0;
@@ -317,12 +337,21 @@ int main(void)
 		}
 
 		process_frame = 0;
+		data_sent = 0;
+		data_already_send = 0;
 
     	// Prepara nova recepção
     	free(currentFrame.data);
     	currentFrame.data = NULL;
 //    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 
+	}
+
+	// Verifica se deve enviar continuamente os dados
+	if(countinuous_DMX_send && data_sent){
+		data_sent = 0;
+		dmx_state = STATE_PREPARE;
+		DMX_SendHandler();
 	}
 
 //	if(GUI_receive == 1){
@@ -733,9 +762,9 @@ void DMX_SendHandler(void) {
         	//DMX_Set_LOW();
         	DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
 
+//        	TIM17->CNT = 0;
+//        	TIM17->ARR = 0;
         	__HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
-			//TIM17->CNT = 0;
-			//TIM17->ARR = 10;
 			dmx_state = STATE_MBB;
 			break;
 
@@ -753,7 +782,7 @@ void DMX_SendHandler(void) {
 
             __HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
             TIM17->CNT = 0;
-            TIM17->ARR = TIME_BREAK;
+            TIM17->ARR = break_time_value - 13; // 13 us de atrso natural do sistema para prepar o timer
             dmx_state = STATE_DATA;
             break;
 
