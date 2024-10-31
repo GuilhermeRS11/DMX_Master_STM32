@@ -49,6 +49,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -61,10 +63,12 @@ void Error_Handler(void);
 #define USB_TX_GPIO_Port GPIOA
 #define USB_RX_Pin GPIO_PIN_3
 #define USB_RX_GPIO_Port GPIOA
-#define LED_DMX_Received_Pin GPIO_PIN_5
-#define LED_DMX_Received_GPIO_Port GPIOA
-#define LED_DMX_Sent_Pin GPIO_PIN_6
-#define LED_DMX_Sent_GPIO_Port GPIOA
+#define LED_Red_Pin GPIO_PIN_5
+#define LED_Red_GPIO_Port GPIOA
+#define LED_Green_Pin GPIO_PIN_6
+#define LED_Green_GPIO_Port GPIOA
+#define LED_Blue_Pin GPIO_PIN_7
+#define LED_Blue_GPIO_Port GPIOA
 #define Break_detection_Pin GPIO_PIN_0
 #define Break_detection_GPIO_Port GPIOB
 #define DMX_TX_Pin GPIO_PIN_9
