@@ -1,0 +1,56 @@
+Change Component DesignItemId : Designator=D1 Old DesignItemId=Diode 1N4148 New DesignItemId=CMP-004-00001-2
+Change Component DesignItemId : Designator=D2 Old DesignItemId=Diode 1N4148 New DesignItemId=CMP-004-00001-2
+Change Component Footprint: Designator=D1 Old Footprint=DO-35 New Footprint=FAIR-SOD-323_V
+Change Component Footprint: Designator=D2 Old Footprint=DO-35 New Footprint=FAIR-SOD-323_V
+Change Component Comment : Designator=D1 Old Comment=Diode 1N4148 New Comment=1N4148WS
+Change Component Comment : Designator=D2 Old Comment=Diode 1N4148 New Comment=1N4148WS
+Change Component Description : Designator=D1 Old Description=High Conductance Fast Diode New Description=Small Signal Diode, 75 V, 0.15 A, -55 to 150 degC, 2-Pin SOD-323, RoHS, Tape and Reel
+Change Component Description : Designator=D2 Old Description=High Conductance Fast Diode New Description=Small Signal Diode, 75 V, 0.15 A, -55 to 150 degC, 2-Pin SOD-323, RoHS, Tape and Reel
+Change Component Library : Designator=D1 Old Library=Miscellaneous Devices.IntLib New Library=Guilherme Silveira
+Change Component Library : Designator=D2 Old Library=Miscellaneous Devices.IntLib New Library=Guilherme Silveira
+Change Managed Component Library Link : Designator=D1 Old VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=494D306B-5CC3-48A9-9DCD-99DCE02A1CAE Old RevisionGUID= New RevisionGUID=D62E13ED-3F7C-4344-AB32-B8264EB33531
+Change Managed Component Library Link : Designator=D2 Old VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=494D306B-5CC3-48A9-9DCD-99DCE02A1CAE Old RevisionGUID= New RevisionGUID=D62E13ED-3F7C-4344-AB32-B8264EB33531
+Change component parameters: Designator = "D1" ("D1"); Footprint = "DO-35"; UniqueID = "\LIADIVQG" ("\LIADIVQG")
+Change component parameters (AddParameter): Name = "Capacitance"; Value = "-323f"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Case/Package"; Value = "SOD-323"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet URL"; Value = "https://www.fairchildsemi.com/datasheets/1N/1N4148WS.pdf"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet Version"; Value = "Rev. 1.2, 03/2015"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Forward Current"; Value = "150mA"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Forward Voltage"; Value = "1V"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "Fairchild"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer URL"; Value = "https://www.fairchildsemi.com/"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Max Operating Temperature"; Value = "150°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Max Surge Current"; Value = ""; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Min Operating Temperature"; Value = "-55°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Mounting Technology"; Value = "SM"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Description"; Value = "2-Pin Small Outline Diode Flat Lead, Body 1.7 x 1.25 mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Quantity"; Value = "3000"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Reference"; Value = "SOD-323"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Packaging"; Value = "TapeandReel"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Peak Inverse Voltage"; Value = ""; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Peak Reverse Current"; Value = "5uA"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Pins"; Value = "2"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Recovery Time"; Value = "4ns"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "RoHS Compliant"; Value = "True"; VariantName = "[No Variations]"
+Change component parameters: Designator = "D2" ("D2"); Footprint = "DO-35"; UniqueID = "\XGOMBJCZ\FKWDPSVP" ("\XGOMBJCZ\FKWDPSVP")
+Change component parameters (AddParameter): Name = "Capacitance"; Value = "-323f"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Case/Package"; Value = "SOD-323"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet URL"; Value = "https://www.fairchildsemi.com/datasheets/1N/1N4148WS.pdf"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Datasheet Version"; Value = "Rev. 1.2, 03/2015"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Forward Current"; Value = "150mA"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Forward Voltage"; Value = "1V"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "Fairchild"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer URL"; Value = "https://www.fairchildsemi.com/"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Max Operating Temperature"; Value = "150°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Max Surge Current"; Value = ""; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Min Operating Temperature"; Value = "-55°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Mounting Technology"; Value = "SM"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Description"; Value = "2-Pin Small Outline Diode Flat Lead, Body 1.7 x 1.25 mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Quantity"; Value = "3000"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Package Reference"; Value = "SOD-323"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Packaging"; Value = "TapeandReel"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Peak Inverse Voltage"; Value = ""; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Peak Reverse Current"; Value = "5uA"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Pins"; Value = "2"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Recovery Time"; Value = "4ns"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "RoHS Compliant"; Value = "True"; VariantName = "[No Variations]"
