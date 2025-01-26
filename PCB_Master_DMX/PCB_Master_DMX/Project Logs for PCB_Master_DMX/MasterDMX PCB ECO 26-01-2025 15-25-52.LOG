@@ -1,0 +1,55 @@
+Change Component Footprint: Designator=J2 Old Footprint=691214110003 New Footprint=691211720003
+Change Component Footprint: Designator=C2 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C4 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C5 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C6 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C7 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C8 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Footprint: Designator=C9 Old Footprint=C2012[0805] New Footprint=C3216[1206]
+Change Component Comment : Designator=R1 Old Comment=5.1k New Comment=5.6k
+Change Component Comment : Designator=R2 Old Comment=5.1k New Comment=5.6k
+Change Component Comment : Designator=R10 Old Comment=10k New Comment=12k
+Change Component Comment : Designator=R11 Old Comment=10k New Comment=12k
+Change Component Comment : Designator=R12 Old Comment=10k New Comment=12k
+Change Component Comment : Designator=R13 Old Comment=10k New Comment=12k
+Change Component Comment : Designator=J2 Old Comment=DMX Interface New Comment=DMX_Connector
+Change Managed Component Library Link : Designator=D1 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=494D306B-5CC3-48A9-9DCD-99DCE02A1CAE Old RevisionGUID= New RevisionGUID=D62E13ED-3F7C-4344-AB32-B8264EB33531
+Change Managed Component Library Link : Designator=D2 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=494D306B-5CC3-48A9-9DCD-99DCE02A1CAE Old RevisionGUID= New RevisionGUID=D62E13ED-3F7C-4344-AB32-B8264EB33531
+Change Managed Component Library Link : Designator=J2 Old VaultGUID= New VaultGUID=B7D15EC3-160A-466F-A46C-7801FE6295A7 Old ItemGUID= New ItemGUID=A19B9BE1-6D80-40BA-AE31-22A761855E9C Old RevisionGUID= New RevisionGUID=4BC3181C-244F-4E83-AC45-2DAEB2021EC4
+Change Managed Component Library Link : Designator=P1 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=E86A0BD2-C455-482A-922A-BE68DEDC67B8 Old RevisionGUID= New RevisionGUID=87E824B1-E1A7-411A-B407-C8F7AD7E298C
+Change Managed Component Library Link : Designator=SW1 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=29A806D9-C727-4127-87AC-C042C4D2908F Old RevisionGUID= New RevisionGUID=FE91E85A-40C7-4AB0-A6DF-D866AFB9E519
+Change Managed Component Library Link : Designator=SW2 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=29A806D9-C727-4127-87AC-C042C4D2908F Old RevisionGUID= New RevisionGUID=FE91E85A-40C7-4AB0-A6DF-D866AFB9E519
+Change Managed Component Library Link : Designator=SW3 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=29A806D9-C727-4127-87AC-C042C4D2908F Old RevisionGUID= New RevisionGUID=FE91E85A-40C7-4AB0-A6DF-D866AFB9E519
+Change Managed Component Library Link : Designator=SW4 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=29A806D9-C727-4127-87AC-C042C4D2908F Old RevisionGUID= New RevisionGUID=FE91E85A-40C7-4AB0-A6DF-D866AFB9E519
+Change Managed Component Library Link : Designator=U1 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=ABC74484-11B7-4C71-A71B-07EA4F0B5A16 Old RevisionGUID= New RevisionGUID=8CE3B444-DFF9-4589-8CAC-E589A83D7C94
+Change Managed Component Library Link : Designator=U4 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=4cf52cf1-41ed-473a-a544-5508229f80bb Old RevisionGUID= New RevisionGUID=c78af0d7-092d-4711-8554-fd071ddf5d75
+Change Managed Component Library Link : Designator=Y1 Old VaultGUID= New VaultGUID=01B41291-A94A-419E-9CA2-C6C7B0EAB8EF Old ItemGUID= New ItemGUID=C0AEC749-25A8-4889-9C6E-41858C223C6C Old RevisionGUID= New RevisionGUID=B463EB69-2EC3-4FC7-8286-918433A38DA8
+Change component parameters: Designator = "J2" ("J2"); Footprint = "691214110003"; UniqueID = "\ATCNUJEU" ("\ATCNUJEU")
+Change component parameters (AddParameter): Name = "Color"; Value = "Green"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Contact Material"; Value = "Brass"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Contact Plating"; Value = "Brass, Tin"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Current"; Value = "10A"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Height"; Value = "15.5mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Housing Material"; Value = "Nylon"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Lead Free"; Value = "Lead Free"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Lead Pitch"; Value = "5mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Length"; Value = "13.7mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Max Operating Temperature"; Value = "105°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Min Operating Temperature"; Value = "-40°C"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Mount"; Value = "Through Hole"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "NexarPartId"; Value = "8917715"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Number of Contacts"; Value = "3"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Number of Levels"; Value = "1"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Number of Pins"; Value = "3"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Number of Positions Per Level"; Value = "3"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Packaging"; Value = "Box"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Pitch"; Value = "5.0038mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Plating"; Value = "Brass, Steel"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "RoHS"; Value = "Compliant"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Stripping Length"; Value = "-7mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Termination"; Value = "Screw"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Voltage"; Value = "300V"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Width"; Value = "15mm"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Wire Gauge (Max)"; Value = "24AWG"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Wire Gauge (Min)"; Value = "12AWG"; VariantName = "[No Variations]"
+Added Member To Class: ClassName=MasterDMX Member=Component J1 CQ-USB-C16PSMT01

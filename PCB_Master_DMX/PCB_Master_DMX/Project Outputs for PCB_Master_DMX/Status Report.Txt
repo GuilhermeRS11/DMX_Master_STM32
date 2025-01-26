@@ -1,0 +1,13 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [PCB_Master_DMX.PrjPcb]
+   Generated File[MasterDMX-RoundHoles.TXT]
+   Generated File[MasterDMX-SlotHoles.TXT]
+   Generated File[MasterDMX.LDP]
+   Generated File[MasterDMX.DRR]
+
+
+Files Generated   : 4
+Documents Printed : 0
+
+Finished Output Generation At 17:15:19 On 26/01/2025

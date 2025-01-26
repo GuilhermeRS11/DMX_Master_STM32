@@ -1,12 +1,15 @@
 Protel Design System Design Rule Check
-PCB File : H:\Github\DMX_Master_STM32\PCB_Master_DMX\PCB_Master_DMX\MasterDMX.PcbDoc
-Date     : 24/01/2025
-Time     : 11:46:20
+PCB File : D:\Users\Guilherme Silveira\Documents\GitHub\DMX_Master_STM32\PCB_Master_DMX\PCB_Master_DMX\MasterDMX.PcbDoc
+Date     : 26/01/2025
+Time     : 16:34:33
 
 Processing Rule : Clearance Constraint (Gap=0.3mm) (All),(All)
 Rule Violations :0
 
-Processing Rule : Clearance Constraint (Gap=0.1mm) (InComponent('J1') OR InComponent('U3') or InNet('5V0') or InNet('D+') or InNet('D-') or InNet('NetJ1_A5') or InNet('NetJ1_B5')),(All)
+Processing Rule : Clearance Constraint (Gap=0.1mm) (InComponent('J1') OR InComponent('U3') or InNet('5V0') or InNet('D+') or InNet('D-') or InNet('NetJ1_A5') or InNet('NetJ1_B5')),(OnLayer('Top Layer'))
+Rule Violations :0
+
+Processing Rule : Clearance Constraint (Gap=0.1mm) (InComponent('U3')),(All)
 Rule Violations :0
 
 Processing Rule : Short-Circuit Constraint (Allowed=No) (All),(All)
@@ -36,7 +39,7 @@ Rule Violations :0
 Processing Rule : Minimum Solder Mask Sliver (Gap=0.09mm) (All),(All)
 Rule Violations :0
 
-Processing Rule : Silk To Solder Mask (Clearance=0.1mm) (IsPad),(All)
+Processing Rule : Silk To Solder Mask (Clearance=0.094mm) (IsPad),(All)
 Rule Violations :0
 
 Processing Rule : Silk to Silk (Clearance=0.254mm) (All),(All)

@@ -1,0 +1,3 @@
+Layer Pairs Export File for PCB: D:\Users\Guilherme Silveira\Documents\GitHub\DMX_Master_STM32\PCB_Master_DMX\PCB_Master_DMX\PCB_Panel.PcbDoc
+LayersSetName=Top_Bot_Thru_Holes|DrillFile=pcb_panel-roundholes.txt|DrillLayers=gtl,gbl
+LayersSetName=Top_Bot_Slot_Holes|DrillFile=pcb_panel-slotholes.txt|DrillLayers=gtl,gbl
