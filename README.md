@@ -35,12 +35,19 @@ The **DMX-Master-STM32** is responsible for receiving data via **USB-C**, interp
 - **4 physical buttons** for direct interaction with the board.
 - **128x64 OLED display (0.96'')** with menus and manual adjustments.
 
+## Schematic Visualization
+
+Here are some images of the schematic circuit of the project:
+
+![Schematic Circuit page 1](documents/images/schematic_1.png)
+![Schematic Circuit page 2](documents/images/schematic_2.png)
+
 ## Hardware Visualization
 
 Here are some images of the 3D PCB model:
 
-![DMX-Master-STM32 - Front View](hardware/Altium_models/3D_PCB_front_view.png)
-![DMX-Master-STM32 - Back View](hardware/Altium_models/3D_PCB_back_view.png)
+![DMX-Master-STM32 - Front View](documents/images/3D_PCB_front_view.png)
+![DMX-Master-STM32 - Back View](documents/images/3D_PCB_back_view.png)
 
 ---
 
