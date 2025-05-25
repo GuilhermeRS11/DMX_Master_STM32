@@ -1,3 +1,5 @@
+> 🔗 [🇧🇷 Read this page in Portuguese](README_pt.md)
+
 # 🎛️ DMX Master STM32
 
 ## 📌 Overview
