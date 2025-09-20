@@ -51,8 +51,8 @@
 #define DMX_GPIO_DeInit() HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2); // Desativa o modo GPIO
 #define DMX_Set_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 #define DMX_Set_HIGH() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-#define DMX_Set_DE_LOW() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_RESET);
-#define DMX_Set_DE_HIGH() HAL_GPIO_WritePin(DMX_DE_GPIO_Port, DMX_DE_Pin, GPIO_PIN_SET);
+#define DMX_Set_DE_LOW() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+#define DMX_Set_DE_HIGH() HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 
 #define HEADER_BUFFER_SIZE 9
 #define GUI_addr &huart1
@@ -73,9 +73,9 @@ DMA_HandleTypeDef hdma_usart2_rx;
 // Defina os estados da máquina de estados para o envio DMX
 typedef enum {
     STATE_IDLE,
-	STATE_PREPARE,
-    STATE_BREAK,
     STATE_MBB,
+    STATE_BREAK,
+    STATE_MAB,
     STATE_DATA,
 } DMX_State;
 
@@ -124,6 +124,13 @@ static void MX_TIM17_Init(void);
 static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 static void DMX_GPIO_Init(void);
+static void DMX_GPIO_ToUSART(void);
+static void DMX_ScheduleTimer(uint16_t period_us);
+static uint16_t DMX_GetMarkBeforeBreak(void);
+static uint16_t DMX_GetMarkAfterBreak(void);
+static uint16_t DMX_GetBreakTimeUs(void);
+static void DMX_DisableTransmitter(void);
+static void DMX_EnableTransmitter(void);
 void DMX_SendHandler(void);
 void startTiming(void);
 void stopTiming(void);
@@ -256,6 +263,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -329,7 +337,7 @@ int main(void)
 		if (DMX_buffer_toSend != NULL) {
 
 			memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
-			dmx_state = STATE_PREPARE;
+			dmx_state = STATE_MBB;
 			data_already_send = 0;
 			DMX_SendHandler();
 		} else {
@@ -350,7 +358,7 @@ int main(void)
 	// Verifica se deve enviar continuamente os dados
 	if(countinuous_DMX_send && data_sent){
 		data_sent = 0;
-		dmx_state = STATE_PREPARE;
+		dmx_state = STATE_MBB;
 		DMX_SendHandler();
 	}
 
@@ -367,7 +375,7 @@ int main(void)
 //
 //			/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
 //			if(receivedIndex > 5){ //Verifica se há dados para serem repassados
-//				dmx_state = STATE_PREPARE;
+//				dmx_state = STATE_MBB;
 //				DMX_SendHandler();
 //			}
 //
@@ -676,8 +684,8 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -712,7 +720,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = DMX_DE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(DMX_DE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
@@ -722,8 +730,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -734,21 +742,83 @@ static void MX_GPIO_Init(void)
 
 static void DMX_GPIO_Init(void){
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
-	uint16_t receivedIndex = 0;
-	uint8_t GUI_receiveFinished = 0;
-	uint8_t GUI_receive = 1;
 
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-	uint32_t currentTime;
-
-	// Configure GPIO pin as output
 	GPIO_InitStruct.Pin = GPIO_PIN_2;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-	unsigned char viewDMX[20];
 
+	DMX_Set_HIGH();
+}
+
+static void DMX_GPIO_ToUSART(void){
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	GPIO_InitStruct.Pin = GPIO_PIN_2;
+	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+	GPIO_InitStruct.Alternate = GPIO_AF1_USART2;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+static void DMX_ScheduleTimer(uint16_t period_us){
+	if (period_us == 0U){
+		period_us = 1U;
+	}
+	__HAL_TIM_CLEAR_FLAG(&htim17, TIM_IT_UPDATE);
+	TIM17->CNT = 0;
+	TIM17->ARR = period_us;
+	__HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
+}
+
+static uint16_t DMX_GetMarkBeforeBreak(void){
+	uint16_t value = TIME_BEFORE_BREAK;
+	if (TBB_value != 0U){
+		value = TBB_value;
+	}
+	if (value < MINIMAL_MAB_TIME){
+		value = MINIMAL_MAB_TIME;
+	}
+	return value;
+}
+
+static uint16_t DMX_GetMarkAfterBreak(void){
+	uint16_t value = TIME_AFTER_BREAK;
+	if (TBF_value != 0U){
+		value = TBF_value;
+	}
+	if (value < MINIMAL_MAB_TIME){
+		value = MINIMAL_MAB_TIME;
+	}
+	return value;
+}
+
+static uint16_t DMX_GetBreakTimeUs(void){
+	uint16_t value = break_time_value;
+	if (value < MINIMAL_BREAK_TIME){
+		value = MINIMAL_BREAK_TIME;
+	}
+	if (value > 13U){
+		value -= 13U;
+	}
+	if (value == 0U){
+		value = MINIMAL_BREAK_TIME;
+	}
+	return value;
+}
+
+static void DMX_DisableTransmitter(void){
+	UART_HandleTypeDef *uart = LIGHTING_addr;
+	while (__HAL_UART_GET_FLAG(uart, UART_FLAG_TC) == RESET){
+	}
+	CLEAR_BIT(uart->Instance->CR1, USART_CR1_TE);
+}
+
+static void DMX_EnableTransmitter(void){
+	UART_HandleTypeDef *uart = LIGHTING_addr;
+	SET_BIT(uart->Instance->CR1, USART_CR1_TE);
 }
 
 void DMX_SendHandler(void) {
@@ -756,44 +826,34 @@ void DMX_SendHandler(void) {
         case STATE_IDLE:
             break;
 
-        case STATE_PREPARE:
-        	DMX_UART_DeInit;
-			DMX_GPIO_Init();   // Inicia DMX modo GPIO
-        	//DMX_Set_LOW();
-        	DMX_Set_DE_HIGH(); // Habilita o barramento DMX para escrita (Necessidade do RS485)
-
-//        	TIM17->CNT = 0;
-//        	TIM17->ARR = 0;
-        	__HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
-			dmx_state = STATE_MBB;
-			break;
-
         case STATE_MBB:
-			DMX_Set_HIGH(); // Setar o MBB
-
-			__HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
-			TIM17->CNT = 0;
-			TIM17->ARR = TIME_BEFORE_BREAK;
-			dmx_state = STATE_BREAK;
-			break;
+            DMX_DisableTransmitter();
+            DMX_GPIO_Init();
+            DMX_Set_HIGH();
+            DMX_ScheduleTimer(DMX_GetMarkBeforeBreak());
+            dmx_state = STATE_BREAK;
+            break;
 
         case STATE_BREAK:
-            DMX_Set_LOW();  // Setar o Break
+            DMX_Set_LOW();
+            DMX_Set_DE_HIGH();
+            DMX_ScheduleTimer(DMX_GetBreakTimeUs());
+            dmx_state = STATE_MAB;
+            break;
 
-            __HAL_TIM_ENABLE_IT(&htim17, TIM_IT_UPDATE);
-            TIM17->CNT = 0;
-            TIM17->ARR = break_time_value - 13; // 13 us de atrso natural do sistema para prepar o timer
+        case STATE_MAB:
+            DMX_Set_HIGH();
+            DMX_ScheduleTimer(DMX_GetMarkAfterBreak());
             dmx_state = STATE_DATA;
             break;
 
-
         case STATE_DATA:
-        	DMX_GPIO_DeInit(); 	// Desativa o modo GPIO
-			DMX_UART_Init();		// Inicia novamente o modo USART
-			dmx_state = STATE_IDLE;
-			HAL_UART_Transmit_IT(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
-			// Final da transmissão é feita no callback de transmissão DMA
-			HAL_NVIC_EnableIRQ(TIM2_IRQn); // Ativa TIM2 para verificar error na recepção de dados
+            DMX_Set_HIGH();
+            DMX_GPIO_ToUSART();
+            DMX_EnableTransmitter();
+            dmx_state = STATE_IDLE;
+            HAL_UART_Transmit_IT(LIGHTING_addr, DMX_buffer_toSend, DMX_buffer_toSend_Size);
+            HAL_NVIC_EnableIRQ(TIM2_IRQn);
             break;
     }
 }

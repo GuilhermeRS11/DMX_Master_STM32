@@ -4,7 +4,7 @@
 
 #define TIME_BREAK 250
 #define TIME_AFTER_BREAK 20
-#define TIME_BEFORE_BREAK 5
+#define TIME_BEFORE_BREAK 20
 #define TIME_WAIT_RDM_RESPONSE 10000 //10ms -> tempo máximo que se espera por uma resposta
 
 void uart_send_break(void);
