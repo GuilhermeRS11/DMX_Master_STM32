@@ -36,8 +36,8 @@
 /* USER CODE BEGIN PD */
 #define TIMEOUT 100
 #define NUM_CHANNELS 40
-#define MINIMAL_BREAK_TIME 80 //80us (por norma o minimo é 88us)
-#define MINIMAL_MAB_TIME 8 //8us (por norma o minimo é 12us)
+#define MINIMAL_BREAK_TIME 80 //80us (por norma o minimo o 88us)
+#define MINIMAL_MAB_TIME 8 //8us (por norma o minimo o 12us)
 //#define DEBUG_RDM
 //#define DEBUG_DMX
 #define GUI_RDM_DMX
@@ -70,7 +70,7 @@ DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
-// Defina os estados da máquina de estados para o envio DMX
+// Defina os estados da maquina de estados para o envio DMX
 typedef enum {
     STATE_IDLE,
     STATE_MBB,
@@ -79,7 +79,7 @@ typedef enum {
     STATE_DATA,
 } DMX_State;
 
-// Variáveis globais
+// Variaveis globais
 DMX_State dmx_state = STATE_IDLE;
 uint16_t dmx_index = 0;
 uint16_t receivedIndex = 0;
@@ -110,6 +110,9 @@ uint8_t UART2_Begin_rxBuffer[3];
 uint8_t on_MAB = 0;
 uint8_t on_break_mark = 0;
 uint8_t data_sent;
+uint8_t gui_frame_is_rdm = 0;
+uint16_t gui_frame_size = 0;
+uint8_t gui_rdm_header_bytes[4] = {0};
 
 /* USER CODE END PV */
 
@@ -139,109 +142,144 @@ void stopTiming(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if(huart == GUI_addr){
-    	TIM2->CNT = 0; // Zera o timer que reseta uart em eventos de travamento
-    	if (currentFrame.data == NULL) {
-			// Cabeçalho e tamanho dos dados detectados, continua a leitura dos dados
-			if ((uartBuffer[0] == header_sequence[0]) &&
-				(uartBuffer[1] == header_sequence[1]) &&
-				(uartBuffer[2] == header_sequence[2])) {
+    if (huart == GUI_addr) {
+        TIM2->CNT = 0; // Zera o timer que reseta uart em eventos de travamento
 
-				// Cabeçalho detectado, continua a leitura do tamanho dos dados
-				currentFrame.capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
-				currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
+        // Sempre que esse callback dispara, significa que o cabecalho de 9 bytes
+        // foi recebido via DMA em uartBuffer. Vamos validar e ler o payload.
+        if ((uartBuffer[0] == header_sequence[0]) &&
+            (uartBuffer[1] == header_sequence[1]) &&
+            (uartBuffer[2] == header_sequence[2])) {
 
-				// Coloca os dados extras nos frames
-				TBB_value = uartBuffer[5];
-				TBF_value = uartBuffer[6];
-				break_time_value = uartBuffer[7];
-				countinuous_DMX_send = uartBuffer[8];
+            uint16_t capacity = (uint16_t)((uartBuffer[3] << 8) | uartBuffer[4]);
 
-				if (currentFrame.data != NULL) {
-					// Continua a recepção dos dados e rodapé
-					HAL_UART_Receive_DMA(huart, currentFrame.data, currentFrame.capacity);
-				} else {
-					// Falha na alocação de memória, lidar com isso conforme necessário
-					free(currentFrame.data);
-					currentFrame.data = NULL;
-					HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
-				}
+            // Detecta se é frame RDM (start code 0xCC logo após o tamanho)
+            if (uartBuffer[5] == 0xCCU) {
+                gui_frame_is_rdm = 1U;
+            } else {
+                gui_frame_is_rdm = 0U;
+                // Para DMX puro, atualiza parametros de tempo
+                TBB_value = uartBuffer[5];
+                TBF_value = uartBuffer[6];
+                break_time_value = uartBuffer[7];
+                countinuous_DMX_send = uartBuffer[8];
+            }
 
-			} else{ // O cabeçalho está errado e precisar esperar a recepção de novos dados
-				free(currentFrame.data);
-				currentFrame.data = NULL;
-				HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
-			}
+            currentFrame.capacity = capacity;
 
-		} else {
-			uint16_t DataSize = currentFrame.capacity;
-			// Se o rodapé estiver correto, processa o frame
-			if ((currentFrame.data[DataSize-3] == tail_sequence[0]) &&
-				(currentFrame.data[DataSize-2] == tail_sequence[1]) &&
-				(currentFrame.data[DataSize-1] == tail_sequence[2])) {
+            // Garante que nao ficamos com lixo antigo
+            free(currentFrame.data);
+            currentFrame.data = (uint8_t *)malloc(currentFrame.capacity);
 
-				process_frame = 1; //Processa o frame
+            if (currentFrame.data != NULL) {
+                // Le o restante do frame (dados + tail) byte a byte.
+                // Para RDM, os primeiros 4 bytes do frame (0xCC,0x01,Message_Length e 1o byte do corpo)
+                // ja foram recebidos junto com o cabecalho da interface em uartBuffer[5..8].
+                // Copiamos esses 4 bytes para o inicio de currentFrame.data.
+                uint16_t received = 0;
+                if (gui_frame_is_rdm) {
+                    currentFrame.data[0] = uartBuffer[5];
+                    currentFrame.data[1] = uartBuffer[6];
+                    currentFrame.data[2] = uartBuffer[7];
+                    currentFrame.data[3] = uartBuffer[8];
+                    received = 4;
+                }
 
-			} else {
-				// Se tiver errado, ignora os dados recebidos e espera recepção de novas dados
-				free(currentFrame.data);
-				currentFrame.data = NULL;
-				HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
-			}
+                while (received < currentFrame.capacity) {
+                    if (HAL_UART_Receive(huart,
+                                         &currentFrame.data[received],
+                                         1,
+                                         TIMEOUT) != HAL_OK) {
+                        // Timeout ou erro ao ler este byte -> para
+                        break;
+                    }
+                    received++;
 
-			HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
-		}
+                    if (received >= 3 &&
+                        currentFrame.data[received - 3] == tail_sequence[0] &&
+                        currentFrame.data[received - 2] == tail_sequence[1] &&
+                        currentFrame.data[received - 1] == tail_sequence[2]) {
+                        // Encontrou o tail completo
+                        break;
+                    }
+                }
+
+                if (received >= 3 &&
+                    currentFrame.data[received - 3] == tail_sequence[0] &&
+                    currentFrame.data[received - 2] == tail_sequence[1] &&
+                    currentFrame.data[received - 1] == tail_sequence[2]) {
+                    // Frame completo pronto para envio DMX/RDM
+                    currentFrame.capacity = received;  // atualiza para o tamanho real lido
+                    process_frame = 1;
+                } else {
+                    // Erro/timeout ou tail nao encontrado: descarta frame
+                    free(currentFrame.data);
+                    currentFrame.data = NULL;
+                }
+            }
+
+            // Prepara para receber um novo cabecalho de 9 bytes via DMA
+            HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
+
+        } else {
+            // Cabecalho invalido, descarta e volta a esperar cabecalho
+            free(currentFrame.data);
+            currentFrame.data = NULL;
+            HAL_UART_Receive_DMA(huart, uartBuffer, HEADER_BUFFER_SIZE);
+        }
     }
 
     if (huart == LIGHTING_addr){
-    	// Corresponde a UART da interface RS485
 
-		/* Recebe os primeiros 3 bytes do frame.
-		 * Se for DMX espera receber 256 bytes
-		 * Se for RDM espera receber o tamanho designado para o frame */
+      /*
+      // Corresponde a UART da interface RS485
 
-		if(huart->ErrorCode != 0){
-			HAL_UART_DeInit(huart);
-			HAL_UART_Init(huart);
-			#ifdef DEBUG_PYSICAL
-				Debug_write_string("\n\rOcorreu um erro no recebimento e os dados não serão processados");
-			#endif
+      // Recebe os primeiros 3 bytes do frame.
+      // Se for DMX espera receber 256 bytes
+      // Se for RDM espera receber o tamanho designado para o frame 
 
-		} else {
+      if(huart->ErrorCode != 0){
+        HAL_UART_DeInit(huart);
+        HAL_UART_Init(huart);
+        #ifdef DEBUG_PYSICAL
+          Debug_write_string("\n\rOcorreu um erro no recebimento e os dados nao serao processados");
+        #endif
 
-			if (UART2_on_Start){
-				/* Se a UART receceu os 3 bytes de inicio, então testa se é RDM ou DMX
-				 * e prapara o recebimento do restante dos dados
-				 *
-				 * */
+      } else {
 
-				UART2_on_Start = 0;
+        if (UART2_on_Start){
+          // Se a UART receceu os 3 bytes de inicio, entao testa se o RDM ou DMX
+          //e prapara o recebimento do restante dos dados
+          
+          
 
-				if (UART2_Begin_rxBuffer[0] == 0xCC){
-					uint16_t Frame_Size = UART2_rxBuffer_Size - 3;
-					HAL_UART_Receive_IT(huart, UART2_rxBuffer, Frame_Size);
+          UART2_on_Start = 0;
 
-				} else{
-					// Tratamento quando o dado recebido não é DMX nem RDM
-					HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
-				}
+          if (UART2_Begin_rxBuffer[0] == 0xCC){
+            uint16_t Frame_Size = UART2_rxBuffer_Size - 3;
+            HAL_UART_Receive_IT(huart, UART2_rxBuffer, Frame_Size);
 
-			} else {
-				HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
-				// Envia o frame para a interface grafica
+          } else{
+            // Tratamento quando o dado recebido nao o DMX nem RDM
+            HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
+          }
 
-			}
-		}
-	}
+        } else {
+          HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
+          // Envia o frame para a interface grafica
+
+        }
+      }*/
+    }
 }
 
-// Função para lidar com a transmissão concluída
+// Funcao para lidar com a transmissao concluoda
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart == &huart2){
-		 // Este callback será chamado quando a transmissão for concluída
+		 // Este callback sera chamado quando a transmissao for concluoda
 		DMX_Set_DE_LOW();  		 // Desabilitar o barramento DMX para escrita (Necessidade do RS485)
-		dmx_state = STATE_IDLE;  // Transição para o estado de IDLE
+		dmx_state = STATE_IDLE;  // Transicao para o estado de IDLE
 		data_sent = 1;
 
 		// Libera o buffer de recebimento de dados
@@ -307,7 +345,7 @@ int main(void)
   HAL_TIM_Base_Start(&htim17);
   HAL_TIM_Base_Start_IT(&htim2);
 
-  // Inicializa a DMA para a recepção UART
+  // Inicializa a DMA para a recepcao UART
   HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
 
   /* USER CODE END 2 */
@@ -322,33 +360,53 @@ int main(void)
 //	}
 
 	if(process_frame && (data_already_send || data_sent)){
-		// Libera a memória anteriormente alocada se necessário
+		// Libera a memoria anteriormente alocada se necessario
 		DMX_buffer_toSend_Size = 0;
 		free(DMX_buffer_toSend);
 		DMX_buffer_toSend = NULL;
-
+  
 		if (DMX_buffer_toSend != NULL)
 			free(DMX_buffer_toSend);
+  
+		// Define o payload a ser enviado (DMX puro ou RDM)
+		if (gui_frame_is_rdm && currentFrame.capacity > 3) {
+			// currentFrame.data contem o frame RDM completo vindo da GUI
+			// seguido do tail da interface (0x7E 0x06 0x3B).
+			// Remove apenas o tail e envia o frame exatamente como a GUI montou.
+			uint16_t rdm_total = (uint16_t)(currentFrame.capacity - 3); // descarta tail 0x7E 0x06 0x3B
 
-		DMX_buffer_toSend_Size = currentFrame.capacity - 5;
-		DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
-
-		// Verifica se a alocação de memória foi bem-sucedida antes de copiar os dados
-		if (DMX_buffer_toSend != NULL) {
-
-			memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
+			DMX_buffer_toSend_Size = rdm_total;
+			DMX_buffer_toSend = (uint8_t *)malloc(DMX_buffer_toSend_Size);
+			if (DMX_buffer_toSend != NULL) {
+				memcpy(DMX_buffer_toSend, currentFrame.data, rdm_total);
+			}
+		} else {
+			// Frame DMX: mantém comportamento original
+			DMX_buffer_toSend_Size = currentFrame.capacity - 5;
+			DMX_buffer_toSend = (DMX_buffer_toSend_Size > 0)
+			                    ? (uint8_t *)malloc(DMX_buffer_toSend_Size)
+			                    : NULL;
+  
+			if (DMX_buffer_toSend != NULL) {
+				// Copia payload DMX sem os 5 bytes de controle/tail
+				memcpy(DMX_buffer_toSend, currentFrame.data, DMX_buffer_toSend_Size);
+			}
+		}
+  
+		// Verifica se a alocacao de memoria foi bem-sucedida antes de iniciar o envio
+		if (DMX_buffer_toSend != NULL && DMX_buffer_toSend_Size > 0) {
 			dmx_state = STATE_MBB;
 			data_already_send = 0;
 			DMX_SendHandler();
 		} else {
-			// Lida com a falha na alocação de memória, se necessário
+			// Lida com a falha na alocacao de memoria, se necessario
 		}
 
 		process_frame = 0;
 		data_sent = 0;
 		data_already_send = 0;
 
-    	// Prepara nova recepção
+    	// Prepara nova recepcao
     	free(currentFrame.data);
     	currentFrame.data = NULL;
 //    	HAL_UART_Receive_DMA(&huart1, uartBuffer, HEADER_BUFFER_SIZE);
@@ -373,8 +431,8 @@ int main(void)
 //
 //		} else if(GUI_receiveFinished == 1){
 //
-//			/* Se acabou o recebimento, envia para a luminária e reseta os parametros de recebimento*/
-//			if(receivedIndex > 5){ //Verifica se há dados para serem repassados
+//			/* Se acabou o recebimento, envia para a luminaria e reseta os parametros de recebimento*/
+//			if(receivedIndex > 5){ //Verifica se ha dados para serem repassados
 //				dmx_state = STATE_MBB;
 //				DMX_SendHandler();
 //			}
@@ -400,7 +458,7 @@ int main(void)
 //
 //		} else if(GUI_receiveFinished == 1){
 //			/* Se acabou o recebimento, envia para a GUI e reseta os parametros de recebimento*/
-//			if(receivedIndex > 1)//Verifica se há dados para serem repassados
+//			if(receivedIndex > 1)//Verifica se ha dados para serem repassados
 //				HAL_UART_Transmit(GUI_addr, receiveBuffer, receivedIndex, 1);
 //
 //			GUI_receiveFinished = 0;
@@ -736,7 +794,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /*
- * Função que envia o comando DMX seguindo os tempos de MBB, break e MAB exigidos pela norma
+ * Funcao que envia o comando DMX seguindo os tempos de MBB, break e MAB exigidos pela norma
  *
  * */
 
@@ -827,6 +885,7 @@ void DMX_SendHandler(void) {
             break;
 
         case STATE_MBB:
+        	//DMX_Set_DE_HIGH(); DE retirado daqui pois o restante esta muito lento. Para poder sincronizar o acionamento de DE com MBB, foi colocado antes de break
             DMX_DisableTransmitter();
             DMX_GPIO_Init();
             DMX_Set_HIGH();
@@ -836,7 +895,7 @@ void DMX_SendHandler(void) {
 
         case STATE_BREAK:
             DMX_Set_LOW();
-            DMX_Set_DE_HIGH();
+            DMX_Set_DE_HIGH(); // Via de regra nao deveria estar aqui, porem foi necessario para poder sincronizar subida com MBB (rever em outros micros)
             DMX_ScheduleTimer(DMX_GetBreakTimeUs());
             dmx_state = STATE_MAB;
             break;
@@ -870,22 +929,22 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 				//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
 
 			} else if (on_MAB) {
-				//Confere se o break 00é pelo menos 80us
+				//Confere se o break 00o pelo menos 80us
 				//uint32_t tempo = TIM14->CNT;
 				if(TIM14->CNT > MINIMAL_BREAK_TIME && UART2_on_Start){
 					//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
-					// Avalia se o tempo de brak foi atingido. Se sim, passa para avaliação do MAB
+					// Avalia se o tempo de brak foi atingido. Se sim, passa para avaliacao do MAB
 					on_break_mark = 0;
 					on_MAB = 1;
 					TIM14->CNT = 0;
 				}
 			}
 
-		} else{						 // Borda de 0 - 1 (Confere se o break 00é pelo menos 80us)
+		} else{						 // Borda de 0 - 1 (Confere se o break 00o pelo menos 80us)
 			//uint32_t tempo = TIM14->CNT;
 			if(TIM14->CNT > MINIMAL_BREAK_TIME && UART2_on_Start){
 				//HAL_GPIO_TogglePin(GPIOC, LD4_Pin);
-				HAL_NVIC_DisableIRQ(EXTI0_1_IRQn); //Trava a recepção de sinais que não sejam break
+				HAL_NVIC_DisableIRQ(EXTI0_1_IRQn); //Trava a recepcao de sinais que nao sejam break
 
 				HAL_UART_Init(LIGHTING_addr);
 				HAL_UART_Receive_DMA(LIGHTING_addr, UART2_Begin_rxBuffer, 3);
@@ -895,21 +954,21 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	}
 }
 
-// Verifica se ocorreu um erro no recebimento dos dados que pode travar a recepção
+// Verifica se ocorreu um erro no recebimento dos dados que pode travar a recepcao
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM14) {  // Verifica se o callback é para o timer TIM14
+	if (htim->Instance == TIM14) {  // Verifica se o callback o para o timer TIM14
 		HAL_NVIC_EnableIRQ(EXTI0_1_IRQn); //Libera para receber um novo frame
 		on_break_mark = 1;
 		on_MAB = 0;
 	}
 }
 
-// Função para iniciar a temporização
+// Funcao para iniciar a temporizacao
 void startTiming() {
     HAL_GPIO_WritePin(GPIOC, Timing_test_Pin, GPIO_PIN_SET); // Defina o pino para alto
 }
 
-// Função para parar a temporização
+// Funcao para parar a temporizacao
 void stopTiming() {
     HAL_GPIO_WritePin(GPIOC, Timing_test_Pin, GPIO_PIN_RESET); // Defina o pino para baixo
 }
